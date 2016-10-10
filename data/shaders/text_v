@@ -1,0 +1,31 @@
+#version 330
+
+layout (location = 0) in vec3 pos;
+layout (location = 1) in vec2 uv;
+layout (location = 2) in float i;
+
+uniform mat4 mvp_matrix;
+uniform samplerBuffer instance_data;
+
+out vec2 Pos;
+out vec4 Bounds;
+out vec2 Uv;
+
+void main()
+{
+    int index = int(i)*5;
+    mat4 model = mat4(texelFetch(instance_data, index),
+                      texelFetch(instance_data, index+1),
+                      texelFetch(instance_data, index+2),
+                      texelFetch(instance_data, index+3));
+    Bounds = texelFetch(instance_data, index+4);
+
+	  gl_Position = (mvp_matrix * model) * vec4(pos,1.0f);
+    
+    //Project the bounds from screen space to clip space
+    vec2 bxy = vec2((mvp_matrix) * vec4(Bounds.xy, 0.0f, 1.0f));
+    vec2 bwz = vec2((mvp_matrix) * vec4(Bounds.zw, 0.0f, 1.0f));
+    Bounds = vec4(bxy,bwz);
+    Pos = gl_Position.xy;
+	Uv = uv;
+}

@@ -1,0 +1,40 @@
+#version 330
+
+struct Skin
+{
+    vec3 fill_color[3];
+    vec3 outline_color;
+    float outline_size;
+};
+
+layout (location = 0) in vec3 pos;
+layout (location = 1) in vec2 uv;
+layout (location = 2) in float index;
+
+uniform mat4 mvp_matrix;
+uniform mat4 projection_matrix;
+uniform samplerBuffer tex_buffer;
+
+out vec3 Color;
+out vec3 Outline;
+out vec2 Uv;
+out float Outline_Size;
+out vec2 LocalPos;
+out vec2 Size;
+
+uniform Skin SkinData[4];
+
+void main()
+{
+    vec4 transform = texelFetch(tex_buffer, int(index*2));
+    vec4 data = texelFetch(tex_buffer, int(index*2)+1);
+
+	gl_Position = mvp_matrix * vec4(pos*vec3(transform.zw,1.0f)+vec3(transform.xy,0.0f),1.0f);
+    LocalPos = pos.xy;
+    Size = transform.zw;
+    
+    Color = SkinData[int(data.x)].fill_color[int(data.y)];
+    Outline = SkinData[int(data.x)].outline_color;
+    Outline_Size = SkinData[int(data.x)].outline_size;
+    Uv = uv;
+}

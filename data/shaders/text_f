@@ -1,0 +1,22 @@
+#version 330
+
+uniform sampler2D tex0;
+
+in vec2 Uv;
+in vec2 Pos;
+in vec4 Bounds;
+
+out vec4 finalColor;
+void main()
+{
+    if(Pos.x < Bounds.x || Pos.y > Bounds.y || Pos.x > Bounds.z || Pos.y < Bounds.w)
+        discard;
+        
+    float gamma = 0.5f;
+    float buf = 0.45f;
+	float dist = texture(tex0, Uv).a;
+    float alpha = smoothstep(buf-gamma, buf+gamma, dist);
+    if(alpha < 0.1)
+        discard;
+    finalColor = vec4(1,1,1,alpha);
+}

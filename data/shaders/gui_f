@@ -1,0 +1,26 @@
+#version 330
+
+in vec2 Uv;
+in vec3 Color;
+in vec3 Outline;
+in float Outline_Size;
+in vec2 LocalPos;
+in vec2 Size;
+
+out vec4 finalColor;
+void main()
+{
+    //Unit to pixel
+    vec2 u2p = vec2(Outline_Size / Size.xy);
+
+    vec2 upper = smoothstep(u2p - u2p*0.5, u2p + u2p*0.5, LocalPos);
+    vec2 lower = smoothstep(LocalPos - u2p*0.5, LocalPos + u2p*0.5, 1 - u2p);
+
+    finalColor = vec4(Color,1.0f);
+    finalColor = vec4((finalColor.rgb * upper.x) + (Outline * (1.0-upper.x)), finalColor.a);
+    finalColor = vec4((finalColor.rgb * upper.y) + (Outline * (1.0-upper.y)), finalColor.a);
+    finalColor = vec4((finalColor.rgb * lower.x) + (Outline * (1.0-lower.x)), finalColor.a);
+    finalColor = vec4((finalColor.rgb * lower.y) + (Outline * (1.0-lower.y)), finalColor.a);
+    if(finalColor.a < 0.1)
+        discard;
+}

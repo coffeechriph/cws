@@ -1,0 +1,69 @@
+DONE
++Custom linalg library (replace glm) - c compatible
++Simple shader creation
++Texture loading/creation - 
++Model loading with assimp - animation support
++Frustum culling
++Cascaded shadow mapping (support for 1 directional light)
++Raycasting without Bullet3D
+    AABB ( - sphere?) collision
++Load mesh animations into a underlying buffer and then allow users to create their own animation by picking time frame
++Bind animations to lua in a cleaner way
+    mesh:get_animation():set_frame_count()
+    mesh:get_animation():set_speed()
+    mesh:get_animation():add_clip()
+((+Give the camera a Transform to unify it with the rest of the API))
+    +Removed Transform altogheter
++ Group togheter renderers relative to their material to reduce bind swaps
++ Sort renderers relative to their mesh to reduce bind swaps ()
+    Material
+        Mesh
+            Renderer[]
++This could potentially allow me to remove the Material and Mesh pointers from the renderer struct to reduce per instance memory usage
++Add vsync to cws_create
++Make face culling optional
+    +Add rendering flag - (culling, wireframed)
++Allow renderers to specify the animation clip to play & keep track of their own animation time
+ (Move selected_clip to the Renderer) - Renderer keeps a selected clip index instead 
++Quaternion rotate towards
++Remove namespacing
++Own implementation of string type
++Switch out new/delete for malloc/free
++Own implementation of dynamic array type (& bucket_array?)
++Replace .cpp -> .c (gcc instead of g++)
++Implement own math library (min,max,clamp)
+
+TODO
+-Clean up luajit bindings 
+    ?Fully implement vector/matrix/quat functionality
+-Make shadows optional for dirlights
+    -Implement a shader system which allows for choosing what basic features to use (shadows,texture,lighting)
+-Custom shader uniforms
+-Sound
+- Add renderer.make_static() which would put the renderers material & mesh into a list and pair it with a list of static model matrices
+  The static renderers model matrix will be set once when make_static() is called - this reduces cpu usage of always updating renderers even if they never move.
+- Once a renderer is set as static the material and mesh cannot be updated - this would open up the possibility of dynamicly batch togheter nearby renderers that share similar rendering data
+-Improve animation node tree traversal algorithm for efficiency
+?Restructure the luajit bindings to not use metatables as much (reduces performance?)
+  Access engine methods through [engine = ffi.C]
+    Examples
+      engine.vec3_add
+      engine.create
+      engine.quat_mul
+      engine.renderer_set_pos
+-Particle emitter
+-Implement merge_mesh(a,b) in order to combine A with B (A would be changed)
+-Store vertex data in the Mesh struct - update clear_mesh() which allows one to delete the data from memory (makes merge_mesh unusable)
+-Dynamic occlusion culling
+  IDEA:
+    (1) During the frustum culling step store renderers that passed in a list of occluders
+    (2) Z sort occluders relative to the camera
+    (3) Render occluders using a simplified shader which renders the index of the occluder as its color (switch out model with a simplified version (default would be a bounding box))
+    The rendering step is done to a low-res render target
+    (4) Get pixel data through PBOs and glReadPixel
+        For each pixel read - check index and add occluder to a list of passed occluders, remove occluder from list of yet-to-pass
+    This would allow for highly dynamic occlusion tests with possibly good results (depending on render-target resolution and the performance hit of fetching texture data)
+    First render to lower-resolution, lower-res models, no textures and the most simple shader, and only if only a occluder passes render the full thing.
+**Effort to make project compatible with a c compiler (preparation for jai)
+-Functions to get filesystem information (directories,files...)
+**Effort to restructure the project into more of a c library to be used directly with c instead of through luajit - (possible build an abstraction layer which would simplify luajit binding creations for custom scripting support)

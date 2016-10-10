@@ -1,0 +1,248 @@
+#version 330
+
+struct EE_Scene_DirLight
+{
+	vec3 pos;
+	vec3 dir;
+	vec3 color;
+	float texel_size;
+};
+
+struct EE_Scene_PointLight
+{
+	vec3 pos;
+	vec3 color;
+	float radius;	
+};
+
+struct EE_Scene_SpotLight
+{
+	vec3 pos;
+	vec3 dir;
+	vec3 color;
+	float cutoff;
+	float edge_factor;
+	float length;
+};
+
+uniform sampler2D tex0;
+uniform EE_Scene_DirLight EE_dirlights[8];
+uniform EE_Scene_PointLight EE_pointlights[32];
+uniform EE_Scene_SpotLight EE_spotlights[32];
+uniform ivec3 EE_lights_count;
+uniform vec3 EE_ambient_light;
+uniform mat4 EE_model_matrix;
+
+//Support 2 directional shadow maps
+uniform sampler2D EE_dirlights_shadow_map_lod1[2];
+uniform sampler2D EE_dirlights_shadow_map_lod2[2];
+uniform sampler2D EE_dirlights_shadow_map_lod3[2];
+uniform sampler2D EE_dirlights_shadow_map_lod4[2];
+
+//Support 8 spot light shadow maps
+uniform sampler2D EE_spotlights_shadow_map[8];
+
+out vec4 finalColor;
+in vec2 Uv;
+in vec3 Color;
+in vec3 Normal;
+in vec3 Pos;
+in vec4 P_Pos;
+
+in vec4 EE_dirlights_lightspace_pos_lod1[2];
+in vec4 EE_dirlights_lightspace_pos_lod2[2];
+in vec4 EE_dirlights_lightspace_pos_lod3[2];
+in vec4 EE_dirlights_lightspace_pos_lod4[2];
+in vec4 EE_spotlights_lightspace_pos[8];
+
+float texture2DCompare(sampler2D s, vec2 uv, float compare)
+{
+	float depth = texture(s, uv).r;
+	return step(compare,depth);
+}
+
+float texture2DShadowLerp(sampler2D s, vec2 size, vec2 uv, float compare)
+{
+	vec2 texelSize = vec2(1.0)/size;
+	vec2 f = fract(uv*size+0.5);
+	vec2 cUv = floor(uv*size+0.5)/size;
+
+	float lb = texture2DCompare(s,cUv+texelSize*vec2(0.0,0.0), compare);
+	float lt = texture2DCompare(s,cUv+texelSize*vec2(0.0,1.0), compare);
+	float rb = texture2DCompare(s,cUv+texelSize*vec2(1.0,0.0), compare);
+	float rt = texture2DCompare(s,cUv+texelSize*vec2(1.0,1.0), compare);
+	float a = mix(lb,lt,f.y);
+	float b = mix(rb,rt,f.y);
+	float c = mix(a,b,f.x);
+	return c;
+}
+
+vec3 EE_dirlight_color(int light_index, vec3 normal)
+{
+	EE_Scene_DirLight light = EE_dirlights[light_index];
+	vec3 p = normalize(-light.dir);
+	vec3 n = normalize(normal);
+
+	return (light.color * max(dot(n,p), 0.0f));
+}
+
+vec3 EE_pointlight_color(EE_Scene_PointLight light, vec3 normal, vec3 pos)
+{
+	vec3 p = light.pos-pos;
+	vec3 n = normalize(normal);
+	float d = distance(light.pos,pos);
+	float att = light.radius / (1.0f + 0.1f*d + 0.01f*(d*d));
+
+	return (light.color * clamp((dot(n,p) / (length(p) * length(n))), 0, 1)) * att;
+}
+
+vec3 EE_spotlight_color(EE_Scene_SpotLight light, vec3 normal, vec3 pos)
+{
+	vec3 p = light.pos-pos;
+	vec3 n = normalize(normal);
+	float d = distance(light.pos,pos);
+	float att = clamp((light.length / (1.0f + 0.1f*d + 0.01f*(d*d))), 0.0f, 2.0f);
+
+	float inner_cutoff = light.cutoff;
+	float outer_cutoff = light.cutoff - light.edge_factor;
+	float cos_angle = dot(normalize(-light.dir), normalize(p));
+
+	float falloff = clamp((cos_angle - outer_cutoff) / (inner_cutoff-outer_cutoff), 0.0f, 1.0f);
+	return (light.color * clamp((dot(n,p) / (length(p) * length(n))), 0, 1)) * falloff * att;
+}
+
+float sample_dirlight_shadow(EE_Scene_DirLight light, vec4 l_pos, sampler2D map, float filter_steps, vec2 uv_offsets)
+{
+	vec4 lightspace_pos = l_pos;
+	vec3 pcoords = lightspace_pos.xyz / lightspace_pos.w;
+
+	float a = 1.0f / 2048.0f;
+	pcoords.x = floor(pcoords.x*2048)*a;
+	pcoords.y = floor(pcoords.y*2048)*a;
+
+	vec2 uvc;
+	uvc.x = 0.25f * pcoords.x + 0.25f + uv_offset.x;
+	uvc.y = 0.25f * pcoords.y + 0.25f + uv_offset.y;
+	float z = 0.5f * pcoords.z + 0.5f;
+
+	vec3 p = normalize(-light.dir);
+	vec3 n = normalize(Normal);
+
+	//PCF + Linear interp
+	float res = 0.0f;
+
+	filter_steps *= 1.0f - float(int(z));
+	for(float x = -filter_steps; x <= filter_steps; ++x)
+	{
+		for(float y = -filter_steps; y <= filter_steps; ++y)
+		{
+			vec2 off = vec2(x,y)*vec2(a,a);
+			//float depth = texture2DShadowLerp(map,vec2(1024,1024), uvc+off, 1.0f);
+			float depth = texture(map, uvc+off).r;
+
+			if(depth < z)
+			{
+				res += 1.0f;
+			}
+		}
+	}
+
+	res /= (filter_steps+filter_steps)*(filter_steps+filter_steps);
+	res = clamp(res, 0.0f, 0.25f);
+
+	return res;
+}
+
+void main()
+{
+	vec3 fpos = vec3(EE_model_matrix * vec4(Pos,1));
+
+	vec3 mixed = EE_ambient_light;
+	for(int i = 0; i < EE_lights_count.x; ++i)
+	{
+		mixed = mix(mixed,EE_dirlight_color(i, Normal), 0.5f);
+	}
+
+	for(int i = 0; i < EE_lights_count.y; ++i)
+	{
+		mixed = mix(mixed,EE_pointlight_color(EE_pointlights[i], Normal, fpos), 0.5f);
+	}
+
+	for(int i = 0; i < EE_lights_count.z; ++i)
+	{
+		mixed = mix(mixed,EE_spotlight_color(EE_spotlights[i], Normal, fpos), 0.5f);
+	}
+
+	finalColor = mix(texture(tex0, Uv), vec4(mixed,1.0f), 0.5f);
+
+	/*
+		Frustum splits are chosen depending on the bounds of a sphere as our frustum splits are fit inside a sphere and not a box.
+		Sphere eq = x^2+y^2+z^2 = r^2
+	*/
+	float light_factor = 0.0f;
+	float P_Pos_sqr = (P_Pos.x*P_Pos.x)+(P_Pos.y*P_Pos.y)+(P_Pos.z*P_Pos.z);
+
+	float asd = clamp(P_Pos_sqr, 0.0f, 4096.0f);
+	int ind = clamp(int(step(asd,63) + step(asd,255) + step(asd,1023)), 0, 3);
+
+	vec4 dirlight_lsp[4]; 
+	dirlight_lsp[0] = EE_dirlights_lightspace_pos_lod4;
+	dirlight_lsp[1] = EE_dirlights_lightspace_pos_lod3;
+	dirlight_lsp[2] = EE_dirlights_lightspace_pos_lod2;
+	dirlight_lsp[3] = EE_dirlights_lightspace_pos_lod1;
+
+	vec2 cascade_offsets[4];
+	cascade_offsets[0] = vec2(0.5,0.5);
+	cascade_offsets[1] = vec2(0.0,0.5);
+	cascade_offsets[2] = vec2(0.5,0.0);
+	cascade_offsets[3] = vec2(0.0,0.0);
+
+	light_factor += sample_dirlight_shadow(0, dirlight_lsp[ind], EE_dirlights_shadow_map[0], 1, cascade_offsets[ind]);
+
+	for(int i = 0; i < EE_lights_count.z; ++i)
+	{
+		vec4 lightspace_pos = EE_spotlights_lightspace_pos[i];
+		vec3 pcoords = lightspace_pos.xyz / lightspace_pos.w;
+		vec2 uvc;
+		uvc.x = 0.5f * pcoords.x + 0.5f;
+		uvc.y = 0.5f * pcoords.y + 0.5f;
+		float z = 0.5f * pcoords.z + 0.5f;
+
+		EE_Scene_SpotLight light = EE_spotlights[i];
+		vec3 p = light.pos-fpos;
+		vec3 n = normalize(Normal);
+		float d = distance(light.pos,fpos);
+		float att = (light.length*0.25f / (1.0f + 0.1f*d + 0.01f*(d*d)));
+
+		float inner_cutoff = light.cutoff;
+		float outer_cutoff = light.cutoff - light.edge_factor;
+		float cos_angle = dot(normalize(-light.dir), normalize(p));
+
+		float falloff = clamp((cos_angle - outer_cutoff) / (inner_cutoff-outer_cutoff), 0.0f, 1.0f);
+		float intensity = clamp((dot(n,p) / (length(p) * length(n))), 0, 1);
+
+		z = clamp(z, 0.0f, 1.0f);
+
+		//PCF + Linear interp
+		float res = 0.0f;
+		for(int x = -1; x <= 1; ++x)
+		{
+			for(int y = -1; y <= 1; ++y)
+			{
+				vec2 off = vec2(x,y) / vec2(1024,1024);
+				float depth = texture2DShadowLerp(EE_spotlights_shadow_map[i], vec2(1024,1024), uvc+off, 1.0);
+				if(depth < (z + 0.00005f) && z <= 0.99f)
+				{
+					res += intensity*att;
+				}
+			}
+		}
+
+		res /= 9.0f;
+		light_factor += res;
+	}
+
+	finalColor *= 1.0f-clamp(light_factor, 0.0f, 0.5f);
+	//finalColor = debug_lights;
+}
+

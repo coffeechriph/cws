@@ -1,0 +1,197 @@
+gui_skin
+    fill_color
+    fill_color_active
+    outline_color
+    outline_size
+
+button
+    pos
+    size
+    event_flags
+
+slider
+    pos
+    size
+    min
+    max
+    value
+    event_flags
+
+surface_transform
+    pos
+    size
+
+item
+    pos,
+    size,
+    fill_color
+
+surface_renderer
+    item_data[] (item) - Items to render
+    text[]      (pos,size,str)
+    mesh
+    text_context
+
+surface
+    buttons[] (button*)
+    sliders[] (slider*)
+
+    -Triggered events, void* is a pointer to the component which can be used to identify which component triggered the event
+    -The component type is used to be able to case the void* to a valid component type
+    triggered_events[] (event_type, void*, component_type)
+
+    mouse_over_components[] (void *, component_type)
+
+/*
+    Rendering
+*/
+new_surface_renderer() -> Creates a new empty surface renderer
+add_item(skin) -> Adds an item to the renderer
+remove_item() -> Removes an item from the renderer
+add_text()
+
+Adding components to a surface won't update it as the update is an expensive operation and should only be done when needed
+add_component
+    buttons.add()
+end
+
+Refreshing the surface will add every component to the surface and store the item data
+The order of component type matters - GuiButtons(1), GuiSliders(2), GuiCheckbox(3)
+refresh_surface()
+    clear_mesh()
+    clear_item_data()
+    
+    -add buttons first
+    for b in buttons
+        -add mesh data
+        add_to_mesh(b)
+
+        -store item data
+        add_item(base)
+    end
+
+    -add sliders afterwards
+    for s in sliders
+        --add mesh data
+        add_to_mesh(base)
+        add_to_mesh(mark)
+
+        --store item data
+        add_item(base)
+        add_item(mark)
+    end
+
+    --add other component types
+
+    ...
+
+    buffer_mesh()
+
+When updating the item data we need to know which type the component to update is because
+for example a slider consists of 2 items which needs to be associated.
+
+Updating looks like this
+index = 0
+for c in buttons
+    item_data[index] = (pos,size,color)
+    index++
+end
+
+for c in sliders
+    item_data[index] = (pos,size,color)
+    item_data[index+1] = (spos, ssize, scolor)
+    index += 2
+end
+
+As you can see the slider increments the index by 2 as it has 2 items associated with it
+
+/*
+    Event handling
+*/
+When handling events we need to first get the surface which the event happens inside
+Surface *focused_surface
+for s in surfaces
+    if mouse_in_surface
+        focused_surface = s
+
+        --check child surfaces
+        for child in s.surfaces
+            if mouse_in_surface
+                focused_surface = child
+                break
+            end
+        end
+
+        break
+    end
+end
+
+-Now we have a surface which has got focus
+if focused_surface != null
+    --Get the event "closest" to the mouse - Z makes a difference, if a component
+    --has a Z of 1 and another of 0 and they are above eachother
+    --the component with Z=0 will be chosen
+    i32 smallest_Z
+    i32 list_index
+    i32 component_type
+
+    for b in buttons
+        if mouse_on_button
+            if b.z < smallest_Z
+                smalles_Z = b.z
+                list_index = index
+                component_type = BUTTON
+            end
+        end
+    end
+
+    for s in sliders
+        if mouse_on_button
+            if s.z < smallest_Z
+                smalles_Z = s.z
+                list_index = index
+                component_type = SLIDER
+            end
+        end
+    end
+
+    -Now we know which component is closest to the mouse
+    if component_type == BUTTON
+        B = buttons[list_index]
+        mouse_over_components.add(B, BUTTON)
+        B.event_flags |= HOVER
+        triggered_events.add({HOVER, B, BUTTON})
+
+        if mouse_click
+            if !(B.event_flags & CLICK)
+                B.event_flags |= CLICK
+                triggered_events.add({CLICK, B, BUTTON})
+            else
+                B.event_flags &= ~CLICK
+                B.event_flags |= MOUSE_DOWN
+                triggered_events.add({MOUSE_DOWN, B, BUTTON})
+        elseif mouse_release
+            if (B.event_flags & MOUSE_DOWN) then
+                B.event_flags &= ~MOUSE_DOWN
+                B.event_flags |= MOUSE_RELEASED
+                triggered_events.add({MOUSE_RELEASED, B, BUTTON})
+            end
+        end
+    elseif component_type == SLIDER
+        --Do similar with the other components
+end
+
+--We also need to know which components we hovered over last frame so that we can
+trigger MOUSE_LEAVE events
+
+for m in mouse_over_components
+    --Do the same for the other components
+    if m.type == BUTTON
+        B = (GuiButton*)m.ptr
+        if !mouse_over
+            B.event_flags &= ~HOVER
+            triggered_events.add({MOUSE_LEAVE, B, BUTTON})
+        end
+    end
+end
+

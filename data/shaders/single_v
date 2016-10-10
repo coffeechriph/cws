@@ -1,0 +1,65 @@
+#version 330
+
+layout (location = 0) in vec3 pos;
+layout (location = 1) in vec3 normal;
+layout (location = 2) in vec2 uv;
+layout (location = 3) in vec3 color;
+
+layout (std140) uniform LightData
+{
+	vec4 ambient_light;
+	vec4 lights_count;
+
+	mat4 shadow_matrices_lod[4];
+	mat4 spotlight_matrices[8];
+
+	vec4 dirlights_dir[2];
+	vec4 dirlights_color[2];
+
+	vec4 pointlights_pos[16];
+	vec4 pointlights_intensity[16];
+
+	vec4 spotlights_pos[16];
+	vec4 spotlights_dir[16];
+	vec4 spotlights_intensity[16];
+	vec4 spotlights_conedata[16];
+};
+
+uniform mat4 mvp_matrix;
+uniform mat4 projection_matrix;
+uniform mat4 model_matrix;
+uniform mat4 view_matrix;
+uniform vec3 renderer_color;
+
+out vec2 Uv;
+out vec3 Normal;
+out vec3 Pos;
+out vec3 Color;
+out vec4 P_Pos;
+
+out vec4 shadow_lightspace_pos_lod1;
+out vec4 shadow_lightspace_pos_lod2;
+out vec4 shadow_lightspace_pos_lod3;
+out vec4 shadow_lightspace_pos_lod4;
+
+out vec4 EE_spotlights_lightspace_pos[8];
+void main()
+{
+	gl_Position = (mvp_matrix) * vec4(pos,1.0f);
+	Uv = uv;
+	Color = clamp(color * renderer_color, 0.0f, 1.0f);
+	
+	Normal = normalize((model_matrix * vec4(normal,0.0f)).xyz);
+	Pos = pos;
+	P_Pos = gl_Position;
+	
+	shadow_lightspace_pos_lod1 = shadow_matrices_lod[0] * model_matrix * vec4(pos+Normal*0.005f,1.0f);
+	shadow_lightspace_pos_lod2 = shadow_matrices_lod[1] * model_matrix * vec4(pos+Normal*0.005f,1.0f);
+	shadow_lightspace_pos_lod3 = shadow_matrices_lod[2] * model_matrix * vec4(pos+Normal*0.005f,1.0f);
+	shadow_lightspace_pos_lod4 = shadow_matrices_lod[3] * model_matrix * vec4(pos+Normal*0.005f,1.0f);
+
+	for(int i = 0; i < lights_count.z; ++i)
+	{
+		EE_spotlights_lightspace_pos[i] = spotlight_matrices[i] * model_matrix * vec4(pos,1.0f);
+	}
+}
