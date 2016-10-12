@@ -219,7 +219,9 @@ struct cwsTextContext
     cwsShaderInit(.shader), \
         .color = (vec3){1,1,1}, \
      .texture_array.data = NULL, \
+    .texture_array.length = 0, \
      .texture_uniforms.data = NULL, \
+    .texture_uniforms.data = 0, \
     .rflags = 0}
 
 #define cwsTexture2DArrayInit(a) (a = (Texture2DArray){.size = (ivec2){.x=0,.y=0},.images_size = 0, .images_count = 0, .images = NULL }; glGenTextures(1, &a.id))

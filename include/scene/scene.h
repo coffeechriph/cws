@@ -5,6 +5,7 @@
 #include "../util/input.h"
 #include "../gfx/video.h"
 #include "../math/collision.h"
+#include "../util/cws_bucket_array.h"
 #include "SDL2/SDL.h"
 #define MAX_FRUSTUM_SPLITS 4
 
@@ -24,8 +25,8 @@ typedef struct
 	cwsMaterial *material;
 	cwsMesh *mesh;
 
-	cws_array(cwsRenderer*,renderers);
-	cws_array(cwsRenderer*,hidden_renderers);
+	cws_bucket_array(cwsRenderer,renderers);
+	cws_bucket_array(cwsRenderer,hidden_renderers);
 } cwsDrawGroup;
 
 typedef struct
@@ -116,32 +117,32 @@ typedef struct
 	vec4 spotlights_conedata[16];
 } cwsUniformLightData;
 
-void 				update_bounds(cwsRenderer *r);
-void				remove_renderer(cwsRenderer *r);
-void 				renderer_set_visibility(cwsRenderer *r, bool c);
-void 				renderer_make_static(cwsRenderer *r);
-cwsMaterial*			renderer_get_material(cwsRenderer *r);
-cwsMesh* 				renderer_get_mesh(cwsRenderer *r);
-cwsRenderer*			new_renderer(cwsMaterial *mat, cwsMesh *mesh);
+void 				cwsUpdateBounds(cwsRenderer *r);
+void				cwsRemoveRenderer(cwsRenderer *r);
+void 				cwsShowRenderer(cwsRenderer *r, bool c);
+void 				cwsRendererMakeStatic(cwsRenderer *r);
+cwsMaterial*			cwsRendererGetMaterial(cwsRenderer *r);
+cwsMesh* 				cwsRendererGetMesh(cwsRenderer *r);
+cwsRenderer*			cwsNewRenderer(cwsMaterial *mat, cwsMesh *mesh);
 
-cwsCamera* 			new_camera();
-cwsCamera*				get_active_camera();
-void 				set_active_camera(cwsCamera *c);
-ray					camera_build_pick_ray(cwsCamera *camera);
+cwsCamera* 			cwsNewCamera();
+cwsCamera*				cwsActiveCamera();
+void 				cwsSetActiveCamera(cwsCamera *c);
+ray					cwsBuildPickRay(cwsCamera *camera);
 
 cwsTerrain_Base*   	terrain_from_height_image(i32 chunks_x, i32 chunks_y, const char *file);        
 void            	draw_terrain(cwsTerrain_Base *d, cwsCamera *cam);
 void            	delete_terrain(cwsTerrain_Base *d);
 
-cwsDirLight*			new_dir_light();
-cwsPointLight*			new_point_light();
-cwsSpotLight*			new_spot_light();
-void 				delete_dir_light(cwsDirLight *l);
-void 				delete_point_light(cwsPointLight *l);
-void 				delete_spot_light(cwsSpotLight *l);
+cwsDirLight*			cwsNewDirLight();
+cwsPointLight*			cwsNewPointLight();
+cwsSpotLight*			cwsNewSpotLight();
+void 				cwsDeleteDirLight(cwsDirLight *l);
+void 				cwsDeletePointLight(cwsPointLight *l);
+void 				cwsDeleteSpotLight(cwsSpotLight *l);
 
-void 				scene_init();
-void 				scene_update();
-void 				scene_draw();
-void 				scene_destroy();
+void 				cwsSceneInit();
+void 				cwsSceneUpdate();
+void 				cwsSceneDraw();
+void 				cwsSceneDestroy();
 #endif

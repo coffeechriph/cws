@@ -32,11 +32,11 @@ bool cws_create(unsigned int screenW, unsigned int screenH, const char * title, 
 		cws_log("SDL_CreateWindow failed! %s", SDL_GetError());
 		return false;
 	}
-
+    
 	main_gl_context = SDL_GL_CreateContext(main_window);
 	glewExperimental = GL_TRUE; 
 	glewInit();
-
+    
 	glDepthMask(GL_TRUE);
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_TEXTURE_2D);
@@ -49,7 +49,7 @@ bool cws_create(unsigned int screenW, unsigned int screenH, const char * title, 
 	TTF_Init();
 
 	cwsVideoInit();
-	scene_init();
+	cwsSceneInit();
 	cwsGuiInit();
 
 	cws_running = true;
@@ -65,7 +65,7 @@ void cws_run()
 	time_cap = SDL_GetTicks();
 
 	cws_running = poll_events();
-	scene_update();
+	cwsSceneUpdate();
 	cwsGuiUpdate();
 
 	if(SDL_GetTicks() - time_since_last_cap > 1000)
@@ -97,7 +97,7 @@ void cws_run()
 void cws_close()
 {
 	cwsVideoDestroy();
-	scene_destroy();
+	cwsSceneDestroy();
 	cwsGuiDestroy();
 	cws_log_close();
 	SDL_GL_DeleteContext(main_gl_context);

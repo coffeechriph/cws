@@ -27,7 +27,7 @@ void render();
 void render_depth();
 void render_depth_ortho(vec3 min, vec3 max);
 
-cwsCamera *get_active_camera()
+cwsCamera *cwsActiveCamera()
 {
 	return active_camera;
 }
@@ -163,74 +163,82 @@ bool cube_in_frustum(vec3 center, vec3 half, vec4 planes[6])
 	return true;
 }
 
-cwsRenderer *new_renderer(cwsMaterial *mat, cwsMesh *mesh)
+cwsRenderer *cwsNewRenderer(cwsMaterial *mat, cwsMesh *mesh)
 {
-	cwsRenderer *r = malloc(sizeof(cwsRenderer));
-	r->minB = (vec3){.x = 0, .y = 0, .z = 0};
-	r->maxB = (vec3){.x = 1, .y = 1, .z = 1};
-	r->color = cwsPackRgb((ivec3){.x = 255, .y = 255, .z = 255});
-	r->animation_clip_index = 0;
-	r->position = (vec3){.x = 0, .y = 0, .z = 0};
-	r->scale = (vec3){.x = 1, .y = 1, .z = 1};
-	r->rotation = (quat){.x = 0, .y = 0, .z = 0, .w = 1};
-
-	bool f = false;
+	cwsRenderer r;
+	r.minB = (vec3){.x = 0, .y = 0, .z = 0};
+	r.maxB = (vec3){.x = 1, .y = 1, .z = 1};
+	r.color = cwsPackRgb((ivec3){.x = 255, .y = 255, .z = 255});
+	r.animation_clip_index = 0;
+	r.position = (vec3){.x = 0, .y = 0, .z = 0};
+	r.scale = (vec3){.x = 1, .y = 1, .z = 1};
+	r.rotation = (quat){.x = 0, .y = 0, .z = 0, .w = 1};
+    r.group_index = 0;
+    
 	for(u32 i = 0; i < draw_groups.length; ++i)
 	{
 		if(draw_groups.data[i].material == mat && draw_groups.data[i].mesh == mesh)
 		{
-			r->group_index = i;
-			cws_array_push(draw_groups.data[i].renderers, r);
-			f = true;
-			break;
+			r.group_index = i;
+            cws_bucket_array_push(draw_groups.data[i].renderers, r);
+            u32 index = 0;
+            cws_bucket_array_last(draw_groups.data[i].renderers, index);
+            return &cws_bucket_array_index(draw_groups.data[i].renderers, index);
 		}
 	}
 
-	if(!f)
-	{
-		cwsDrawGroup grp;
-		grp.material = mat;
-		grp.mesh = mesh;
-		cws_array_init(cwsRenderer*, grp.hidden_renderers, 0);
-		cws_array_init(cwsRenderer*, grp.renderers, 4);
-		cws_array_push(grp.renderers,r);
+    cwsDrawGroup grp;
+    grp.material = mat;
+    grp.mesh = mesh;
+    
+    cws_bucket_array_init(cwsRenderer, grp.hidden_renderers, 0);
+    cws_bucket_array_init(cwsRenderer, grp.renderers, 0);
 
-		r->group_index = draw_groups.length;
-		
-		cws_array_push(draw_groups, grp);
-	}
-
-	return r;
+    r.group_index = draw_groups.length;
+    cws_bucket_array_push(grp.renderers,r);
+    
+    cws_array_push(draw_groups, grp);
+    cwsDrawGroup *pgrp = &draw_groups.data[draw_groups.length-1];
+    
+    u32 index = 0;
+    cws_bucket_array_last(pgrp->renderers, index);
+    return &cws_bucket_array_index(pgrp->renderers, index);
 }
 
-void remove_renderer(cwsRenderer *r)
+void cwsRemoveRenderer(cwsRenderer *r)
 {
 	if(r->group_index >= 0)
 	{
-		for(u32 i = 0; i < draw_groups.data[r->group_index].renderers.length; ++i)
+        cwsDrawGroup *grp = &draw_groups.data[r->group_index];
+        for(u32 i = 0; i < cws_bucket_array_item_count(grp->renderers); ++i)
 		{
-			if(draw_groups.data[r->group_index].renderers.data[i] == r)
+            if(!cws_bucket_array_occupied(grp->renderers, i))
+            {
+                continue;
+            }
+            
+            if(&cws_bucket_array_index(grp->renderers,i) == r)
 			{
-				cws_array_remove(draw_groups.data[r->group_index].renderers, i);
-				free(r);
+                cws_log("Renderer remove unimplemented!");
+				//cws_bucket_array_remove(grp->renderers, i);
 				break;
 			}
 		}
 	}
 }
 
-cwsMaterial *renderer_get_material(cwsRenderer *r)
+cwsMaterial *cwsRendererGetMaterial(cwsRenderer *r)
 {
 	return draw_groups.data[r->group_index].material;
 }
 
-cwsMesh *renderer_get_mesh(cwsRenderer *r)
+cwsMesh *cwsRendererGetMesh(cwsRenderer *r)
 {
 	return draw_groups.data[r->group_index].mesh;
 }
 
-void update_bounds(cwsRenderer *r)
-{
+void cwsUpdateBounds(cwsRenderer *r)
+{    
 	//Calculate world bounds
 	cwsMesh *mesh = draw_groups.data[r->group_index].mesh;
 	mat4 rot = quat_to_mat4(r->rotation);
@@ -281,42 +289,17 @@ void update_bounds(cwsRenderer *r)
 	r->maxB = vec3_add(vec3_mul(max, r->scale), r->position);	
 }
 
-void renderer_make_static(cwsRenderer *r)
+void cwsRendererMakeStatic(cwsRenderer *r)
 {
 
 }
 
-void renderer_set_visibility(cwsRenderer *r, bool c)
+void cwsRendererShow(cwsRenderer *r, bool c)
 {
-	if(!c)
-	{	
-		for(u32 i = 0; i < draw_groups.data[r->group_index].renderers.length; ++i)
-		{
-			if(draw_groups.data[r->group_index].renderers.data[i] == r)
-			{
-				cws_array_remove(draw_groups.data[r->group_index].renderers,i);
-				break;
-			}
-		}
-
-		cws_array_push(draw_groups.data[r->group_index].hidden_renderers, r);
-	}
-	else
-	{
-		for(u32 i = 0; i < draw_groups.data[r->group_index].hidden_renderers.length; ++i)
-		{
-			if(draw_groups.data[r->group_index].hidden_renderers.data[i] == r)
-			{
-				cws_array_remove(draw_groups.data[r->group_index].hidden_renderers,i);
-				break;
-			}
-		}
-
-		cws_array_push(draw_groups.data[r->group_index].renderers, r);
-	}
+    cws_log("Renderer hide/show unimplemented!");
 }
 
-cwsCamera *new_camera()
+cwsCamera *cwsNewCamera()
 {
 	cwsCamera *cam = malloc(sizeof(cwsCamera));
 	cam->far_distance = 1000.0f;
@@ -332,7 +315,7 @@ cwsCamera *new_camera()
 	return cam;
 }
 
-void set_active_camera(cwsCamera *c)
+void cwsSetActiveCamera(cwsCamera *c)
 {
 	if(c == NULL)
 		return;
@@ -347,7 +330,7 @@ void set_active_camera(cwsCamera *c)
 	csm_projections[3] = mat4_perspective(sz.x, sz.y, active_camera->fov, 58.0f, 122.0f);
 }
 
-ray camera_build_pick_ray(cwsCamera *camera)
+ray cwsCameraBuildPickRay(cwsCamera *camera)
 {
 	vec2 mp = get_mouse_position();
 	vec3 coord = (vec3){.x = (2.0f*mp.x) / (f32)cwsScreenSize().x - 1.0f, 
@@ -379,7 +362,7 @@ ray camera_build_pick_ray(cwsCamera *camera)
 	return r;
 }
 
-cwsDirLight *new_dir_light()
+cwsDirLight *cwsNewDirLight()
 {
 	cwsDirLight *light = malloc(sizeof(cwsDirLight));
 	light->rot = (vec3){.x=0,.y=0,.z=0};
@@ -388,7 +371,7 @@ cwsDirLight *new_dir_light()
 	return light;
 }
 
-cwsPointLight *new_point_light()
+cwsPointLight *cwsNewPointLight()
 {
 	cwsPointLight *light = malloc(sizeof(cwsPointLight));
 	light->pos = (vec3){.x=0,.y=0,.z=0};
@@ -398,7 +381,7 @@ cwsPointLight *new_point_light()
 	return light;
 }
 
-cwsSpotLight *new_spot_light()
+cwsSpotLight *cwsNewSpotLight()
 {
 	cwsSpotLight *light = (cwsSpotLight*)malloc(sizeof(cwsSpotLight));
 	light->pos = (vec3){.x=0,.y=0,.z=0};
@@ -428,7 +411,7 @@ cwsSpotLight *new_spot_light()
 	return light;
 }
 
-void delete_dir_light(cwsDirLight *l)
+void cwsDeleteDirLight(cwsDirLight *l)
 {
 }
 
@@ -519,15 +502,24 @@ void merge_sort_zipair(ZIPair in[], ZIPair *out, i32 list_size)
 	}
 }
 
-void scene_init()
+void cwsSceneInit()
 {
+    default_camera.far_distance = 1000.0f;
+	default_camera.near_distance = 1.0f;
+	default_camera.fov = 60.0f;
+	default_camera.fog_begin = 600.0f;
+	default_camera.fog_end = 1000.0f;
+	default_camera.position = (vec3){.x = 0, .y = 0, .z = 0};
+	default_camera.dir = (vec3){.x = 0, .y = 0, .z = -1};
+	default_camera.rot = (vec3){.x = 0, .y = 0, .z = 0};
+    cwsSetActiveCamera(&default_camera);
+    
 	cws_array_init(cwsDrawGroup, draw_groups, 0);
 	cws_array_init(cwsCamera*, cameras,0);
 	cws_array_init(cwsDirLight*, dirlights, 0);
 	cws_array_init(cwsPointLight*, pointlights, 0);
 	cws_array_init(cwsSpotLight*, spotlights, 0);
 
-	active_camera = &default_camera;
     cwsShaderInit(shadow_shader);
 	cwsShaderFromsrc(&shadow_shader,
                                          "#version 330\n"
@@ -620,28 +612,20 @@ void scene_init()
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void scene_destroy()
+void cwsSceneDestroy()
 {
     cwsDeleteShader(&shadow_shader);
     cwsDeleteShader(&shadow_shader_animated);
     
 	for(u32 i = 0; i < draw_groups.length; ++i)
 	{
-		for(u32 j = 0; j < draw_groups.data[i].renderers.length; ++j)
-		{
-			free(draw_groups.data[i].renderers.data[j]);
-		}
-
-		for(u32 j = 0; j < draw_groups.data[i].hidden_renderers.length; ++j)
-		{
-			free(draw_groups.data[i].hidden_renderers.data[j]);
-		}
+        cwsDrawGroup *grp = &draw_groups.data[i];
 
         cwsDeleteMesh(draw_groups.data[i].mesh);
         cwsDeleteShader(&draw_groups.data[i].material->shader);
         cwsDeleteMaterial(draw_groups.data[i].material);
-		cws_array_free(draw_groups.data[i].renderers);
-		cws_array_free(draw_groups.data[i].hidden_renderers);
+		cws_bucket_array_free(grp->renderers);
+		cws_bucket_array_free(grp->hidden_renderers);
 	}
 
 	cws_array_free(draw_groups);
@@ -747,7 +731,7 @@ void ee_update_lights()
 			vec3* frustum_points = split_frustum(inv);
 
 			//Instead of constructing a ortho projection from the frustum points we use
-			//a circle instead which ensures that the size doesn't change when rotating 
+			//a sphere instead which ensures that the size doesn't change when rotating 
 			//which removes swimming during rotation
 			vec3 fps = vec3_sub(frustum_points[0], frustum_points[6]);
 			f32 radius = vec3_length(fps)*0.5f;
@@ -763,28 +747,32 @@ void ee_update_lights()
 			}
 			center = vec3_mul_scalar(center, 1.0f / 8.0f);
 
-			//Create our basic - none texel-snapped look-at for the light
+			//Create a basic - none texel-snapped look-at matrix
 			mat4 LOOKAT = mat4_lookat((vec3){.x = 0, .y = 0, .z = 0},
 									  (vec3){.x = dir.x, .y = dir.y, .z = -dir.z}, 
 									  (vec3){.x = 0, .y = 1, .z = 0});
-			LOOKAT = mat4_scale(LOOKAT, (vec3){.x = tpu, .y = tpu, .z = tpu}); //Scale the lookat matrix by our tpu scale
-			center = vec3_transform(center, LOOKAT);
+            //Scale the lookat matrix by our tpu scale
+			LOOKAT = mat4_scale(LOOKAT, (vec3){.x = tpu, .y = tpu, .z = tpu});
 
-			//Here we snap to texels
+            //Transform the frustrum center by the scaled lookat matrix - This will cause the center to be 
+            //in texel space
+            center = vec3_transform(center, LOOKAT);
+            
+            //Floor the result which will place the center on even texels
 			center.x = floor(center.x);
 			center.y = floor(center.y);
 
-			//scale back to world coords
+			//scale back to world coords - Now the world coords of the frustum center will be placed on even texels
 			mat4 lookat_inv = mat4_inverse(LOOKAT);
 			center = vec3_transform(center, lookat_inv);
 
-			//calculate the real look-at which is now snapping to texels
+			//calculate the real look-at matrix which uses the snapped frustum center
 			vec3 sdir = (vec3){.x = -dir.x, .y = -dir.y, .z = dir.z};
 			sdir = vec3_mul_scalar(sdir, radius*2);
 			vec3 eye = vec3_sub(center, sdir);
 			csm_data.light_view[j] = mat4_lookat(eye, center, (vec3){.x = 0, .y = 1, .z = 0});
 
-			//Create our projection matrix
+			//Create our projection matrix from the sphere radius
 			csm_data.frame_projections[j] = mat4_ortho(-radius, radius, -radius, radius, -50.0f, 1000.0);
 
 			//Render shadow maps
@@ -888,7 +876,7 @@ void ee_update_lights()
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
 
-void scene_update()
+void cwsSceneUpdate()
 {
 	ee_update_lights();
 }
@@ -901,25 +889,31 @@ void render_depth()
 {
 	for(u32 i = 0; i < draw_groups.length; ++i)
 	{
-		cwsBindMesh(draw_groups.data[i].mesh);
-		for(u32 j = 0; j < draw_groups.data[i].renderers.length; ++j)
+        cwsDrawGroup *grp = &draw_groups.data[i];
+		cwsBindMesh(grp->mesh);
+        for(u32 j = 0; j < cws_bucket_array_item_count(grp->renderers); ++j)
 		{
-			cwsRenderer *obj 		= draw_groups.data[i].renderers.data[j];
+            if(!cws_bucket_array_occupied(grp->renderers, j))
+            {
+                continue;
+            }
+            
+            cwsRenderer *obj 		= &cws_bucket_array_index(grp->renderers, j);
 			mat4 tr = mat4_translate(mat4_default, obj->position);
 				
 			mat4 res = quat_to_mat4(obj->rotation);
 			tr = mat4_mul(tr, res);
 			tr = mat4_scale(tr, obj->scale);
 			
-			if(draw_groups.data[i].mesh->anim_data != NULL)
+			if(grp->mesh->anim_data != NULL)
 			{
 				cwsBindMaterial(&shadow_material_animated);
-				cwsDrawAnimatedMesh(tr, draw_groups.data[i].mesh, GL_TRIANGLES, (f32)(SDL_GetTicks())/1000.0f);
+				cwsDrawAnimatedMesh(tr, grp->mesh, GL_TRIANGLES, (f32)(SDL_GetTicks())/1000.0f);
 			}
 			else
 			{
                 cwsBindMaterial(&shadow_material);
-				cwsDrawMesh(tr, draw_groups.data[i].mesh, GL_TRIANGLES);
+				cwsDrawMesh(tr, grp->mesh, GL_TRIANGLES);
 			}
 		}
 	}
@@ -930,10 +924,16 @@ void render_depth_ortho(vec3 min, vec3 max)
 	vec3 pmin, pmax;
 	for(u32 i = 0; i < draw_groups.length; ++i)
 	{
-		cwsBindMesh(draw_groups.data[i].mesh);
-		for(u32 j = 0; j < draw_groups.data[i].renderers.length; ++j)
+        cwsDrawGroup *grp = &draw_groups.data[i];
+		cwsBindMesh(grp->mesh);
+        for(u32 j = 0; j < cws_bucket_array_item_count(grp->renderers); ++j)
 		{
-			cwsRenderer *obj 		= draw_groups.data[i].renderers.data[j];
+            if(!cws_bucket_array_occupied(grp->renderers, j))
+            {
+                continue;
+            }
+            
+            cwsRenderer *obj 		= &cws_bucket_array_index(grp->renderers,j);
 
 			pmin = obj->minB;
 			pmax = obj->maxB;
@@ -952,15 +952,15 @@ void render_depth_ortho(vec3 min, vec3 max)
 			tr = mat4_mul(tr, res);
 			tr = mat4_scale(tr, obj->scale);
 
-			if(draw_groups.data[i].mesh->anim_data != NULL)
+			if(grp->mesh->anim_data != NULL)
 			{
 				cwsBindMaterial(&shadow_material_animated);
-				cwsDrawAnimatedMesh(tr, draw_groups.data[i].mesh, GL_TRIANGLES, (f32)(SDL_GetTicks())/1000.0f);
+				cwsDrawAnimatedMesh(tr, grp->mesh, GL_TRIANGLES, (f32)(SDL_GetTicks())/1000.0f);
 			}
 			else
 			{
                 cwsBindMaterial(&shadow_material);
-				cwsDrawMesh(tr, draw_groups.data[i].mesh, GL_TRIANGLES);
+				cwsDrawMesh(tr, grp->mesh, GL_TRIANGLES);
 			}
 		}
 	}
@@ -977,20 +977,21 @@ void render()
 	//Render draw groups
 	for(u32 i = 0; i < draw_groups.length; ++i)
 	{
-		cwsBindMaterial(draw_groups.data[i].material);
+        cwsDrawGroup *grp = &draw_groups.data[i];
+		cwsBindMaterial(grp->material);
 		
 		//Bind the light data 
-		u32 light_ubo_index = glGetUniformBlockIndex(draw_groups.data[i].material->shader.id, "LightData");
-		glUniformBlockBinding(draw_groups.data[i].material->shader.id, light_ubo_index, 1);
+		u32 light_ubo_index = glGetUniformBlockIndex(grp->material->shader.id, "LightData");
+		glUniformBlockBinding(grp->material->shader.id, light_ubo_index, 1);
 		glBindBufferBase(GL_UNIFORM_BUFFER, 1, light_ubo_id);
 
 		//Pass the light data to the shaders
-		i32 tex_offset = draw_groups.data[i].material->texture_array.length;
+		i32 tex_offset = grp->material->texture_array.length;
 		if(csm_data.shadows_enabled == true && dirlights.length >= 1)
 		{
 			glActiveTexture(GL_TEXTURE0+tex_offset);
 			glBindTexture(GL_TEXTURE_2D, csm_data.frame_buffer_texture);
-			glUniform1i(glGetUniformLocation(draw_groups.data[i].material->shader.id, "shadow_map"), tex_offset);
+			glUniform1i(glGetUniformLocation(grp->material->shader.id, "shadow_map"), tex_offset);
 			tex_offset++;
 		}
 
@@ -1000,7 +1001,7 @@ void render()
 			sprintf(buf, "EE_spotlights_shadow_map[%d]", k);
 			glActiveTexture(GL_TEXTURE0+tex_offset);
 			glBindTexture(GL_TEXTURE_2D, spotlights.data[k]->frame_buffer_texture);
-			glUniform1i(glGetUniformLocation(draw_groups.data[i].material->shader.id, buf), tex_offset);
+			glUniform1i(glGetUniformLocation(grp->material->shader.id, buf), tex_offset);
 			
 			mat4 light_view = mat4_rotate(mat4_default, (vec3){.x = spotlights.data[k]->rot.x, .y = 0.0f, .z = 0.0f});
 			light_view 		= mat4_rotate(light_view, (vec3){.x = 0.0f, .y = spotlights.data[k]->rot.y, .z = 0.0f});
@@ -1013,14 +1014,18 @@ void render()
 			tex_offset++;
 		}
 
-		cwsBindMesh(draw_groups.data[i].mesh);
+		cwsBindMesh(grp->mesh);
 
 		//Render every renderer that's using the bound material & mesh
-		for(u32 j = 0; j < draw_groups.data[i].renderers.length; ++j)
+        for(u32 j = 0; j < cws_bucket_array_item_count(grp->renderers); ++j)
 		{
-			cwsRenderer *obj = draw_groups.data[i].renderers.data[j];
+            if(!cws_bucket_array_occupied(grp->renderers, j))
+            {
+                continue;
+            }
+            cwsRenderer *obj = &cws_bucket_array_index(grp->renderers,j);
 			vec3 cl = cwsUnpackRgb(obj->color);
-			glUniform3f(glGetUniformLocation(draw_groups.data[i].material->shader.id, "renderer_color"), cl.x, cl.y, cl.z);
+			glUniform3f(glGetUniformLocation(grp->material->shader.id, "renderer_color"), cl.x, cl.y, cl.z);
 
 			vec3 b1 = vec3_add(obj->minB,obj->maxB);
 			vec3 b2 = vec3_sub(obj->maxB,obj->minB);
@@ -1028,7 +1033,7 @@ void render()
 			b2 = vec3_mul_scalar(b2, 0.5f);
 			if(!cube_in_frustum(b1, b2, planes))
 			{
-				continue;
+			//	continue;
 			}
 
 			mat4 t = mat4_translate(mat4_default, obj->position);
@@ -1036,17 +1041,17 @@ void render()
 			t = mat4_mul(t, rt);
 			t = mat4_scale(t, obj->scale);
 
-			if(draw_groups.data[i].mesh->anim_data != NULL)
+			if(grp->mesh->anim_data != NULL)
 			{
-				if(obj->animation_clip_index >= 0 && obj->animation_clip_index < (i32)draw_groups.data[i].mesh->anim_data->animations[0]->clips_count)
+				if(obj->animation_clip_index >= 0 && obj->animation_clip_index < (i32)grp->mesh->anim_data->animations[0]->clips_count)
 				{
-					draw_groups.data[i].mesh->anim_data->animations[0]->selected_clip = &draw_groups.data[i].mesh->anim_data->animations[0]->clips[obj->animation_clip_index];
-					cwsDrawAnimatedMesh(t, draw_groups.data[i].mesh, GL_TRIANGLES, (f32)(SDL_GetTicks()*0.001f));
+					grp->mesh->anim_data->animations[0]->selected_clip = &grp->mesh->anim_data->animations[0]->clips[obj->animation_clip_index];
+					cwsDrawAnimatedMesh(t, grp->mesh, GL_TRIANGLES, (f32)(SDL_GetTicks()*0.001f));
 				}
 			}
 			else
-			{
-				cwsDrawMesh(t, draw_groups.data[i].mesh, GL_TRIANGLES);
+            {
+				cwsDrawMesh(t, grp->mesh, GL_TRIANGLES);
 			}
 		}
 	}
@@ -1232,7 +1237,7 @@ void delete_terrain(cwsTerrain_Base *d)
     free(d);
 }
 
-void scene_draw()
+void cwsSceneDraw()
 {
 	if(active_camera != NULL)
 	{

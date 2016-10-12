@@ -9,11 +9,43 @@
 #include "scene/scene.h"
 #include "gui/gui.h"
 #include "cws.h"
- 
+#include "util/cws_bucket_array.h"
+
 int main(int args, char *argv[])
 {
-    cws_create(1280, 720, "Game", true);
+    cws_create(1280, 720, "Game", false);
+   
+    cwsMaterial mat;
+    cwsMaterialInit(mat);
+    mat.rflags = RF_NONE;
+    
+    cwsShaderFromfile(&mat.shader, "./data/shaders/single_v", "./data/shaders/single_f");
+    cwsTexture2D tex;
+    
+    cwsTextureFromfile(&tex, "./data/gfx/tree1.png", IF_NEAREST);
+    cwsMaterialAddTexture(&mat, tex);
 
+    cwsMesh mesh;
+    cwsMeshFromfile(&mesh, "./data/tree1.dae");
+    
+    f32 _x = -10.0f, _z = -5.0f;
+    for(u32 i = 0; i < 7000; ++i)
+    {
+        cwsRenderer *renderer = cwsNewRenderer(&mat,&mesh);
+        renderer->position = (vec3){.x = _x, .y = -1.0, .z = _z};
+        renderer->scale = (vec3){.x = 2, .y = 2, .z = 2};
+        cwsUpdateBounds(renderer);
+        
+        _x += 0.5f;
+        if(_x >= 10)
+        {
+            _x = -10.0f;
+            _z -= 0.5f;
+        }
+    }
+    
+    
+    /*
     cwsGuiSurface *surface = cwsNewSurface(NULL);
     surface->transform->size = (vec2){.x = 400, .y = 400};
     surface->renderer->fill = true;
@@ -42,13 +74,14 @@ int main(int args, char *argv[])
     tbtn->pos = (vec2){.x = 220, .y = 100};
     
     cwsRefreshSurface(surface);
-    cwsShowSurface(surface,true);
+    cwsShowSurface(surface,false);*/
     while(cws_running)
     {
         cwsClear();
-        scene_draw();
+        cwsSceneDraw();
         cwsGuiDraw();
         cwsSwapBuffers();
+
         cws_run();
     }
     

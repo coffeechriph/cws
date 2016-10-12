@@ -7,7 +7,6 @@ struct {\
     type *data; \
     u32 size; \
     u32 length; \
-    u32 type_size;\
 } var;
 
 #define cws_array_init(type,var,sz) \
@@ -18,20 +17,20 @@ else {\
     var.data = NULL;\
 } \
 var.length = 0; \
-var.size = sz; \
-var.type_size = sizeof(type)
+var.size = sz;
 
-#define cws_array_free(arr) free(arr.data); arr.size = 0; arr.length = 0; arr.type_size = 0
+#define cws_array_free(arr) free(arr.data); arr.size = 0; arr.length = 0
 #define cws_array_push(arr, item) \
 if(arr.data == NULL) { \
-    arr.data = malloc(arr.type_size);\
+    arr.data = malloc(sizeof(*arr.data));\
     arr.size = 1; \
+    arr.length = 0; \
 } \
 if (arr.length < arr.size) {\
     arr.data[arr.length++] = item;\
 }\
 else { \
-    void* X = realloc(arr.data, arr.type_size * arr.size*2);\
+    void* X = realloc(arr.data, sizeof(*arr.data) * arr.size*2);\
     if(X) {\
         arr.data = X; arr.data[arr.length++] = item; arr.size *= 2;\
     }\

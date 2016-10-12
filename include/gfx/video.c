@@ -148,7 +148,7 @@ bool cwsMeshFromfile(cwsMesh *mesh, const char *file)
 		i32 vertex_attribs[4] = {3, 3, 2, 3};
 		cwsEmptyMesh(mesh, vertex_attribs, 4);
 		VERTEX_LENGTH = 11;
-	}
+    }
 
 	//Mesh bounds
 	vec3 min,max;
@@ -994,7 +994,7 @@ void cwsDeleteMaterial(cwsMaterial *mat)
 }
 
 void cwsMaterialAddTexture(cwsMaterial *mat, cwsTexture2D tex)
-{   
+{
 	//Create a texture uniform which will be used to bind this texture
 	char buf[5];
     sprintf(buf, "tex%d", mat->texture_array.length);
