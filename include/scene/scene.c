@@ -8,9 +8,15 @@ cws_array(cwsSpotLight*,spotlights);
 
 cwsCamera *active_camera;
 cwsCamera default_camera;
-mat4 active_camera_proj, active_camera_view;
+mat4 active_camera_proj;
+mat4 active_camera_view;
 mat4 csm_projections[4];
 cwsCSMData csm_data;
+
+cwsMesh *DEPTH_MESH;
+cwsMaterial DEPTH_MATERIAL;
+cwsRenderer *DEPTH_RENDERER;
+cwsTexture2D DEPTH_TEXTURE;
 
 cwsMaterial shadow_material;
 cwsShader shadow_shader;
@@ -168,7 +174,6 @@ cwsRenderer *cwsNewRenderer(cwsMaterial *mat, cwsMesh *mesh)
 	cwsRenderer r;
 	r.minB = (vec3){.x = 0, .y = 0, .z = 0};
 	r.maxB = (vec3){.x = 1, .y = 1, .z = 1};
-	r.color = cwsPackRgb((ivec3){.x = 255, .y = 255, .z = 255});
 	r.animation_clip_index = 0;
 	r.position = (vec3){.x = 0, .y = 0, .z = 0};
 	r.scale = (vec3){.x = 1, .y = 1, .z = 1};
@@ -302,7 +307,7 @@ void cwsRendererShow(cwsRenderer *r, bool c)
 cwsCamera *cwsNewCamera()
 {
 	cwsCamera *cam = malloc(sizeof(cwsCamera));
-	cam->far_distance = 1000.0f;
+    cam->far_distance = 1000.0f;
 	cam->near_distance = 1.0f;
 	cam->fov = 60.0f;
 	cam->fog_begin = 600.0f;
@@ -324,10 +329,10 @@ void cwsSetActiveCamera(cwsCamera *c)
 	vec2 sz = cwsScreenSize();
 	active_camera_proj = mat4_perspective(sz.x, sz.y, active_camera->fov, active_camera->near_distance, active_camera->far_distance);
 
-	csm_projections[0] = mat4_perspective(sz.x, sz.y, active_camera->fov, 4.0f, 10.0f);
-	csm_projections[1] = mat4_perspective(sz.x, sz.y, active_camera->fov, 10.0f, 26.0f);
-	csm_projections[2] = mat4_perspective(sz.x, sz.y, active_camera->fov, 26.0f, 58.0f);
-	csm_projections[3] = mat4_perspective(sz.x, sz.y, active_camera->fov, 58.0f, 122.0f);
+	csm_projections[0] = mat4_perspective(sz.x, sz.y, active_camera->fov, 4.0f, 12.0f);
+	csm_projections[1] = mat4_perspective(sz.x, sz.y, active_camera->fov, 11.0f, 28.0f);
+	csm_projections[2] = mat4_perspective(sz.x, sz.y, active_camera->fov, 27.0f, 60.0f);
+	csm_projections[3] = mat4_perspective(sz.x, sz.y, active_camera->fov, 59.0f, 124.0f);
 }
 
 ray cwsCameraBuildPickRay(cwsCamera *camera)
@@ -504,6 +509,10 @@ void merge_sort_zipair(ZIPair in[], ZIPair *out, i32 list_size)
 
 void cwsSceneInit()
 {
+    active_camera_proj = mat4_default;
+    active_camera_view = mat4_default;
+    
+    memset(&uniform_light_data, 0, sizeof(cwsUniformLightData));
     default_camera.far_distance = 1000.0f;
 	default_camera.near_distance = 1.0f;
 	default_camera.fov = 60.0f;
@@ -519,6 +528,38 @@ void cwsSceneInit()
 	cws_array_init(cwsDirLight*, dirlights, 0);
 	cws_array_init(cwsPointLight*, pointlights, 0);
 	cws_array_init(cwsSpotLight*, spotlights, 0);
+
+    cwsMaterialInit(DEPTH_MATERIAL);
+    cwsShaderInit(DEPTH_MATERIAL.shader);
+    cwsShaderFromsrc(&DEPTH_MATERIAL.shader,
+                     "#version 330\n"
+                     "layout(location = 0) in vec3 pos;\n"
+                     "layout (location = 1) in vec3 normal;\n"
+                     "layout (location = 2) in vec2 uv;\n"
+                     "layout (location = 3) in vec3 color;\n"
+                     
+                     "uniform mat4 mvp_matrix;\n"
+                     "out vec2 UV;\n"
+                     "void main()\n"
+                     "{\n"
+                     "gl_Position = (mvp_matrix) * vec4(pos,1.0f);\n"
+                     "UV = uv;\n"
+                     "}\n"
+                     , 
+                     "#version 330\n"
+                     "out vec4 out_color;\n"
+                     "in vec2 UV;\n"
+                     "uniform sampler2D tex0;\n"
+                     "void main()\n"
+                     "{\n"
+                     "out_color = ((texture(tex0, UV))-0.05f)*5;\n"
+                     "}\n");
+    DEPTH_MESH = malloc(sizeof(cwsMesh));
+    cwsPlaneMesh(DEPTH_MESH);
+    DEPTH_RENDERER = cwsNewRenderer(&DEPTH_MATERIAL, DEPTH_MESH);
+    DEPTH_RENDERER->position = (vec3){0,1.5f,0};
+    DEPTH_RENDERER->rotation = quat_from_euler((vec3){.x = 90, .y = 0, .z = 0});
+    DEPTH_RENDERER->scale = (vec3){.x = 3, .y = 3, .z = 3};
 
     cwsShaderInit(shadow_shader);
 	cwsShaderFromsrc(&shadow_shader,
@@ -538,7 +579,7 @@ void cwsSceneInit()
 									   "out vec4 out_color;\n"
 									   "void main()\n"
 									   "{\n"
-										"out_color = vec4(1.0, 0.0, 0.0, 0.0);\n"
+										"out_color = vec4(1.0);\n"
 									   "}\n");
     cwsMaterialInit(shadow_material);
 	shadow_material.shader = shadow_shader;
@@ -592,6 +633,11 @@ void cwsSceneInit()
 	csm_data.frame_buffer_count = 4;
 	csm_data.frame_buffer_size = 2048;
 	csm_data.shadows_enabled = true;
+    for(u32 i = 0; i < 4; ++i)
+    {
+        csm_data.light_view[i] = mat4_default;
+        csm_data.frame_projections[i] = mat4_default;
+    }
 	glGenFramebuffers(1, &csm_data.frame_buffer);
 	glGenTextures(1, &csm_data.frame_buffer_texture);
 
@@ -610,6 +656,10 @@ void cwsSceneInit()
 	glDrawBuffer(GL_NONE);
 	glReadBuffer(GL_NONE);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    DEPTH_TEXTURE.id = csm_data.frame_buffer_texture;
+    DEPTH_TEXTURE.size = (ivec2){.x = 2048, .y = 2048};
+    cwsMaterialAddTexture(&DEPTH_MATERIAL, DEPTH_TEXTURE);
 }
 
 void cwsSceneDestroy()
@@ -620,10 +670,6 @@ void cwsSceneDestroy()
 	for(u32 i = 0; i < draw_groups.length; ++i)
 	{
         cwsDrawGroup *grp = &draw_groups.data[i];
-
-        cwsDeleteMesh(draw_groups.data[i].mesh);
-        cwsDeleteShader(&draw_groups.data[i].material->shader);
-        cwsDeleteMaterial(draw_groups.data[i].material);
 		cws_bucket_array_free(grp->renderers);
 		cws_bucket_array_free(grp->hidden_renderers);
 	}
@@ -701,7 +747,7 @@ f32 world_depth_to_clip(f32 depth, mat4 proj)
 void ee_update_lights()
 {
 	vec2 win_size = cwsScreenSize();
-	if(csm_data.shadows_enabled == true && active_camera != NULL && dirlights.length >= 1)
+	if(active_camera != NULL && dirlights.length >= 1)
 	{
 		//The first directional light is used by default to cast shadows
 		cwsDirLight *light = dirlights.data[0];
@@ -911,8 +957,8 @@ void render_depth()
 				cwsDrawAnimatedMesh(tr, grp->mesh, GL_TRIANGLES, (f32)(SDL_GetTicks())/1000.0f);
 			}
 			else
-			{
-                cwsBindMaterial(&shadow_material);
+            {
+                cwsBindMaterial(&shadow_material); 
 				cwsDrawMesh(tr, grp->mesh, GL_TRIANGLES);
 			}
 		}
@@ -943,7 +989,7 @@ void render_depth_ortho(vec3 min, vec3 max)
 			|| pmax.y < min.y || pmin.y > max.y
 			|| pmax.z < min.z || pmin.z > max.z))
 			{
-				continue;
+			//	continue;
 			}
 
 			mat4 tr = mat4_translate(mat4_default, obj->position);
@@ -987,7 +1033,7 @@ void render()
 
 		//Pass the light data to the shaders
 		i32 tex_offset = grp->material->texture_array.length;
-		if(csm_data.shadows_enabled == true && dirlights.length >= 1)
+		if(dirlights.length >= 1)
 		{
 			glActiveTexture(GL_TEXTURE0+tex_offset);
 			glBindTexture(GL_TEXTURE_2D, csm_data.frame_buffer_texture);
@@ -1023,10 +1069,8 @@ void render()
             {
                 continue;
             }
+            
             cwsRenderer *obj = &cws_bucket_array_index(grp->renderers,j);
-			vec3 cl = cwsUnpackRgb(obj->color);
-			glUniform3f(glGetUniformLocation(grp->material->shader.id, "renderer_color"), cl.x, cl.y, cl.z);
-
 			vec3 b1 = vec3_add(obj->minB,obj->maxB);
 			vec3 b2 = vec3_sub(obj->maxB,obj->minB);
 			b1 = vec3_mul_scalar(b1, 0.5f);
@@ -1255,6 +1299,23 @@ void cwsSceneDraw()
 		vec3 pd = vec3_add(active_camera->position,dir);
 		active_camera_view = mat4_lookat(active_camera->position, pd, up);
 		cwsSetPVMatrices(active_camera_proj, active_camera_view);
+        
+        if(get_key_state(SDL_SCANCODE_G) == KEY_PRESSED)
+        {
+            cwsSetPVMatrices(csm_data.frame_projections[0], csm_data.light_view[0]);
+        }
+        else if(get_key_state(SDL_SCANCODE_H) == KEY_PRESSED)
+        {
+            cwsSetPVMatrices(csm_data.frame_projections[1], csm_data.light_view[1]);
+        }
+        else if(get_key_state(SDL_SCANCODE_J) == KEY_PRESSED)
+        {
+            cwsSetPVMatrices(csm_data.frame_projections[2], csm_data.light_view[2]);
+        }
+        else if(get_key_state(SDL_SCANCODE_K) == KEY_PRESSED)
+        {
+            cwsSetPVMatrices(csm_data.frame_projections[3], csm_data.light_view[3]);
+        }
 	}
 	
 	render();

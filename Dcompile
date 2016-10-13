@@ -16,13 +16,13 @@ gcc \
 	./include/main.c \
 	-L /usr/local/lib/luajit5.1/debug \
 	-lSDL2 -lSDL2_image -lSDL2_ttf -lGL -lGLEW -lassimp -lluajit-5.1 \
-	-o ./bin/cws \
+	-fpic \
+	-shared \
+	-o ./bin/libcws.so \
 	-g \
 	-rdynamic \
 	-Wall \
 	-ldl \
 	-lm
-
-	#-fpic \
-	#-shared \
-	#-o ./bin/libcws.so \
+	#-o ./bin/cws \
+	#

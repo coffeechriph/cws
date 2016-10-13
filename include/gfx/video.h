@@ -222,7 +222,7 @@ struct cwsTextContext
     .texture_array.length = 0, \
      .texture_uniforms.data = NULL, \
     .texture_uniforms.data = 0, \
-    .rflags = 0}
+    .rflags = RF_CULLING_ENABLED}
 
 #define cwsTexture2DArrayInit(a) (a = (Texture2DArray){.size = (ivec2){.x=0,.y=0},.images_size = 0, .images_count = 0, .images = NULL }; glGenTextures(1, &a.id))
 extern SDL_Window *main_window;

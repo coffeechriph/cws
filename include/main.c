@@ -44,7 +44,6 @@ int main(int args, char *argv[])
         }
     }
     
-    
     /*
     cwsGuiSurface *surface = cwsNewSurface(NULL);
     surface->transform->size = (vec2){.x = 400, .y = 400};

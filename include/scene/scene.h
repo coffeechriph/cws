@@ -15,7 +15,6 @@ typedef struct
 	vec3 position;
 	vec3 scale;
 	quat rotation;
-	i32 color;
 	i32 animation_clip_index;
 	i32 group_index;
 } cwsRenderer;
