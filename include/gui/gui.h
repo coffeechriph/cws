@@ -137,13 +137,17 @@ struct cwsGuiSurface
     cws_array(cwsText*, texts);
 };
 
+extern GuiButtonSkin button_skin;
+extern GuiSliderSkin slider_skin;
+extern GuiCheckboxSkin checkbox_skin;
+extern SurfaceSkin surface_skin;
+
 void 				   cwsGuiInit();
 void 				   cwsGuiDestroy();
 void 				   cwsGuiDraw();
 void 				   cwsGuiUpdate();
 
 cwsGuiSurface * cwsNewSurface(cwsGuiSurface *parent);
-void                    cwsDeleteSurface(cwsGuiSurface *s);
 void 				    cwsClearSurface(cwsGuiSurface *s);
 void 				    cwsRefreshSurface(cwsGuiSurface *s);
 void                    cwsShowSurface(cwsGuiSurface *s, bool c);

@@ -1,5 +1,6 @@
 #ifndef EE_SCENE_H
 #define EE_SCENE_H
+#include "float.h"
 #include "../types.h"
 #include "../util/log.h"
 #include "../util/input.h"

@@ -30,9 +30,10 @@ typedef enum
 
 typedef enum
 {
-	RF_NONE,
-	RF_CULLING_ENABLED,
-	RF_WIREFRAME_ENABLED
+	RF_NONE = 0,
+	RF_CULLING_ENABLED = 1,
+	RF_WIREFRAME_ENABLED = 2,
+    RF_NO_DEPTH_TEST = 4
 } RenderingFlags;
 
 typedef struct
@@ -249,7 +250,7 @@ bool cwsImageFromfile(cwsImage2D *img, const char *file);
 void cwsDeleteImage(cwsImage2D *i);
 
 void  cwsEmptyMesh(cwsMesh *mesh, i32 *vertex_attribs, i32 count);
-void  cwsPlaneMesh(cwsMesh *mesh);
+void  cwsPlaneMesh(cwsMesh *mesh, f32 uv_repeat);
 void  cwsCubeMesh(cwsMesh *mesh);
 void  cwsBoundMesh(cwsMesh *mesh);
 bool  cwsMeshFromfile(cwsMesh *mesh, const char *file);

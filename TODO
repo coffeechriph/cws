@@ -32,6 +32,8 @@ DONE
 +Own implementation of dynamic array type (& bucket_array?)
 +Replace .cpp -> .c (gcc instead of g++)
 +Implement own math library (min,max,clamp)
++Effort to restructure the project into more of a c library to be used directly with c instead of through luajit 
++Add RF_DEPTH_TEST flag to cwsMaterial
 
 TODO
 -Clean up luajit bindings 
@@ -64,6 +66,11 @@ TODO
         For each pixel read - check index and add occluder to a list of passed occluders, remove occluder from list of yet-to-pass
     This would allow for highly dynamic occlusion tests with possibly good results (depending on render-target resolution and the performance hit of fetching texture data)
     First render to lower-resolution, lower-res models, no textures and the most simple shader, and only if only a occluder passes render the full thing.
-**Effort to make project compatible with a c compiler (preparation for jai)
--Functions to get filesystem information (directories,files...)
-**Effort to restructure the project into more of a c library to be used directly with c instead of through luajit - (possible build an abstraction layer which would simplify luajit binding creations for custom scripting support)
+
+-Effort to make project compatible with a c compiler (preparation for jai)
+	-Functions to get filesystem information (directories,files...)
+	-(possible build an abstraction layer which would simplify luajit binding creations for custom scripting support)
+-Support adding cwsTexts to cwsGuiSurface
+-Implement cwsGuiTextbox
+-Implement cwsGuiImage
+-Implement cwsGuiMeshView

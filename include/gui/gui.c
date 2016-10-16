@@ -518,7 +518,7 @@ void update_surface_component_data(cwsGuiSurface *s)
                             slider_skin.outline_size);
         //mark
         s->renderer->item_data.data[index++] = slider->pos.x + ((f32)slider->size.x / (f32)(slider->max-slider->min)) * ((f32)slider->value - slider->min) - ((f32)slider->size.x * slider_skin.mark_scale.x * 0.5f);
-        s->renderer->item_data.data[index++] = slider->pos.y - slider->size.y * 0.25f;
+        s->renderer->item_data.data[index++] = slider->pos.y - slider->size.y / (slider->size.y * slider_skin.mark_scale.y);
         s->renderer->item_data.data[index++] = (f32)slider->size.x * slider_skin.mark_scale.x;
         s->renderer->item_data.data[index++] = (f32)slider->size.y * slider_skin.mark_scale.y;
 
@@ -671,8 +671,8 @@ void surface_events_clicked(cwsGuiSurface *s, vec2 mouse)
         
         cwsGuiSlider *slider = &cws_bucket_array_index(s->sliders, i);
         //Mouse is not above slider
-        if(mouse.x < slider->pos.x || mouse.x > slider->pos.x + slider->size.x
-        || mouse.y < slider->pos.y || mouse.y > slider->pos.y + slider->size.y)
+        if(mouse.x < slider->pos.x - 1 || mouse.x > slider->pos.x + slider->size.x + 1
+        || mouse.y < slider->pos.y - 1 || mouse.y > slider->pos.y + slider->size.y + 1)
         {
             continue;
         }
@@ -763,9 +763,9 @@ void surface_events_down(cwsGuiSurface *s, vec2 mouse)
         }
         
         cwsGuiSlider *slider = &cws_bucket_array_index(s->sliders, i);
-        //Mouse is not above button
-        if(mouse.x < slider->pos.x || mouse.x > slider->pos.x + slider->size.x
-        || mouse.y < slider->pos.y || mouse.y > slider->pos.y + slider->size.y)
+        //Mouse is not above slider
+        if(mouse.x < slider->pos.x - 1 || mouse.x > slider->pos.x + slider->size.x + 1
+        || mouse.y < slider->pos.y - 1  || mouse.y > slider->pos.y + slider->size.y + 1)
         {
             continue;
         }

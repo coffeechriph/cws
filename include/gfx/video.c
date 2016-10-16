@@ -471,13 +471,13 @@ void cwsEmptyMesh(cwsMesh *mesh, i32 *vertex_attribs, i32 count)
 	glBindVertexArray(0);
 }
 
-void cwsPlaneMesh(cwsMesh *mesh)
+void cwsPlaneMesh(cwsMesh *mesh, f32 uv_repeat)
 {
 	f32 plane_v[] = {
 		-0.5f, 0.0f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1, 1, 1,
-		-0.5f, 0.0f,  0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1, 1, 1,
-		 0.5f, 0.0f,  0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1, 1, 1,
-		 0.5f, 0.0f, -0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1, 1, 1
+		-0.5f, 0.0f,  0.5f, 0.0f, 1.0f, 0.0f, 0.0f, uv_repeat, 1, 1, 1,
+		 0.5f, 0.0f,  0.5f, 0.0f, 1.0f, 0.0f, uv_repeat, uv_repeat, 1, 1, 1,
+		 0.5f, 0.0f, -0.5f, 0.0f, 1.0f, 0.0f, uv_repeat, 0.0f, 1, 1, 1
 	};
 
 	i32 plane_i[] = {
@@ -742,6 +742,10 @@ bool cwsTextureFromsrc(cwsTexture2D *tex, SDL_Surface *img, i32 filter)
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filters[filter]);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filters[filter]);
 	glTexImage2D(GL_TEXTURE_2D, 0, internal, img->w, img->h, 0, mode, GL_UNSIGNED_BYTE, img->pixels);
+    if(filter > 1)
+    {
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
 	glBindTexture(GL_TEXTURE_2D, 0);
 
 	tex->size = (ivec2){.x = img->w, .y = img->h};
@@ -1051,6 +1055,15 @@ void cwsBindMaterial(cwsMaterial *mat)
 	{
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);	
 	}
+    
+    if((mat->rflags & RF_NO_DEPTH_TEST))
+    {
+        glDisable(GL_DEPTH_TEST);
+    }
+    else
+    {
+        glEnable(GL_DEPTH_TEST);
+    }
 }
 
 /*

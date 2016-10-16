@@ -13,11 +13,6 @@ mat4 active_camera_view;
 mat4 csm_projections[4];
 cwsCSMData csm_data;
 
-cwsMesh *DEPTH_MESH;
-cwsMaterial DEPTH_MATERIAL;
-cwsRenderer *DEPTH_RENDERER;
-cwsTexture2D DEPTH_TEXTURE;
-
 cwsMaterial shadow_material;
 cwsShader shadow_shader;
 
@@ -328,14 +323,14 @@ void cwsSetActiveCamera(cwsCamera *c)
 	active_camera = c;
 	vec2 sz = cwsScreenSize();
 	active_camera_proj = mat4_perspective(sz.x, sz.y, active_camera->fov, active_camera->near_distance, active_camera->far_distance);
-
-	csm_projections[0] = mat4_perspective(sz.x, sz.y, active_camera->fov, 4.0f, 12.0f);
-	csm_projections[1] = mat4_perspective(sz.x, sz.y, active_camera->fov, 11.0f, 28.0f);
-	csm_projections[2] = mat4_perspective(sz.x, sz.y, active_camera->fov, 27.0f, 60.0f);
-	csm_projections[3] = mat4_perspective(sz.x, sz.y, active_camera->fov, 59.0f, 124.0f);
+    
+	csm_projections[0] = mat4_perspective(sz.x, sz.y, active_camera->fov, 4.0f, 16.0f);
+	csm_projections[1] = mat4_perspective(sz.x, sz.y, active_camera->fov, 8.0f, 32.0f);
+	csm_projections[2] = mat4_perspective(sz.x, sz.y, active_camera->fov, 32.0f, 128.0f);
+	csm_projections[3] = mat4_perspective(sz.x, sz.y, active_camera->fov, 64.0f, 512.0f);
 }
 
-ray cwsCameraBuildPickRay(cwsCamera *camera)
+ray cwsBuildPickRay(cwsCamera *camera)
 {
 	vec2 mp = get_mouse_position();
 	vec3 coord = (vec3){.x = (2.0f*mp.x) / (f32)cwsScreenSize().x - 1.0f, 
@@ -529,38 +524,6 @@ void cwsSceneInit()
 	cws_array_init(cwsPointLight*, pointlights, 0);
 	cws_array_init(cwsSpotLight*, spotlights, 0);
 
-    cwsMaterialInit(DEPTH_MATERIAL);
-    cwsShaderInit(DEPTH_MATERIAL.shader);
-    cwsShaderFromsrc(&DEPTH_MATERIAL.shader,
-                     "#version 330\n"
-                     "layout(location = 0) in vec3 pos;\n"
-                     "layout (location = 1) in vec3 normal;\n"
-                     "layout (location = 2) in vec2 uv;\n"
-                     "layout (location = 3) in vec3 color;\n"
-                     
-                     "uniform mat4 mvp_matrix;\n"
-                     "out vec2 UV;\n"
-                     "void main()\n"
-                     "{\n"
-                     "gl_Position = (mvp_matrix) * vec4(pos,1.0f);\n"
-                     "UV = uv;\n"
-                     "}\n"
-                     , 
-                     "#version 330\n"
-                     "out vec4 out_color;\n"
-                     "in vec2 UV;\n"
-                     "uniform sampler2D tex0;\n"
-                     "void main()\n"
-                     "{\n"
-                     "out_color = ((texture(tex0, UV))-0.05f)*5;\n"
-                     "}\n");
-    DEPTH_MESH = malloc(sizeof(cwsMesh));
-    cwsPlaneMesh(DEPTH_MESH);
-    DEPTH_RENDERER = cwsNewRenderer(&DEPTH_MATERIAL, DEPTH_MESH);
-    DEPTH_RENDERER->position = (vec3){0,1.5f,0};
-    DEPTH_RENDERER->rotation = quat_from_euler((vec3){.x = 90, .y = 0, .z = 0});
-    DEPTH_RENDERER->scale = (vec3){.x = 3, .y = 3, .z = 3};
-
     cwsShaderInit(shadow_shader);
 	cwsShaderFromsrc(&shadow_shader,
                                          "#version 330\n"
@@ -656,10 +619,6 @@ void cwsSceneInit()
 	glDrawBuffer(GL_NONE);
 	glReadBuffer(GL_NONE);
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    DEPTH_TEXTURE.id = csm_data.frame_buffer_texture;
-    DEPTH_TEXTURE.size = (ivec2){.x = 2048, .y = 2048};
-    cwsMaterialAddTexture(&DEPTH_MATERIAL, DEPTH_TEXTURE);
 }
 
 void cwsSceneDestroy()
