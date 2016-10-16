@@ -1,0 +1,12 @@
+The cws game library written in C with OpenGL, SDL2 and Assimp
+
+[Features]
+Window creation / input
+Texture/Shader creation / loading
+3D model loading/creation
+3D model animation
+Stable CSM shadow mapping
+Basic lighting (directional,spot,point)
+Ray casting (AABB)
+Basic Gui (buttons,sliders,text,checkboxes and toggle buttons)
+Linear algebra library (vectors,matrices and quaternions)
