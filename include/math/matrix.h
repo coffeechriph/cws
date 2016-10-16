@@ -77,6 +77,7 @@ vec3    vec3_rotate(vec3 in, vec3 rad);
 vec3    vec3_normalize(vec3 in);
 vec3    vec3_crossproduct(vec3 v1, vec3 v2);
 f32     vec3_length(vec3 in);
+f32 vec2_length(vec2 in);
 f32     vec3_length_sqr(vec3 in);
 f32     vec3_dot(vec3 v1, vec3 v2);
 

@@ -15,6 +15,13 @@ i32 get_mouse_state(i32 button)
     return mouse_states[button];
 }
 
+void reset_mouse_state()
+{
+    mouse_states[0] = 0;
+    mouse_states[1] = 0;
+    mouse_states[2] = 0;
+}
+
 vec2 get_mouse_position()
 {
     return mouse_position;

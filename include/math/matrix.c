@@ -88,6 +88,11 @@ vec3 vec3_normalize(vec3 in)
 	return (vec3) { .x = in.x * sl, .y = in.y * sl, .z = in.z * sl};
 }
 
+f32 vec2_length(vec2 in)
+{
+    return sqrt(in.x*in.x + in.y*in.y);
+}
+
 f32 vec3_length(vec3 in)
 {
 	return sqrt(in.x*in.x + in.y*in.y + in.z*in.z);

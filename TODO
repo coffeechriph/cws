@@ -34,6 +34,7 @@ DONE
 +Implement own math library (min,max,clamp)
 +Effort to restructure the project into more of a c library to be used directly with c instead of through luajit 
 +Add RF_DEPTH_TEST flag to cwsMaterial
++Stop the MOUSE_PRESSED event if it occured over a gui element.
 
 TODO
 -Clean up luajit bindings 

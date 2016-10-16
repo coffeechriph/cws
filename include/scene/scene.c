@@ -19,7 +19,7 @@ cwsShader shadow_shader;
 cwsMaterial shadow_material_animated;
 cwsShader shadow_shader_animated;
 
-vec3 EE_ambient_light = (vec3){.x = 0.5f, .y = 0.5f, .z = 0.5f};
+vec3 EE_ambient_light = (vec3){.x = 1.0f, .y = 1.0f, .z = 1.0f};
 
 u32 light_ubo_id = 0;
 cwsUniformLightData uniform_light_data;

@@ -25,6 +25,7 @@ i32         get_key_state(i32 code);
 i32         get_mouse_state(i32 button);
 vec2        get_mouse_position();
 vec2        get_mouse_delta();
+void reset_mouse_state();
 void        capture_mouse(bool c);
 void        show_mouse(bool c);
 bool        poll_events();

@@ -68,8 +68,8 @@ void cws_run()
 	time_cap = SDL_GetTicks();
 
 	cws_running = poll_events();
-	cwsSceneUpdate();
-	cwsGuiUpdate();
+    cwsGuiUpdate();
+    cwsSceneUpdate();
 
 	if(SDL_GetTicks() - time_since_last_cap > 1000)
 	{
@@ -83,18 +83,6 @@ void cws_run()
 	}
 
 	fps_counter++;
-
-	/*
-		Only profile for 10 seconds
-	*/
-	if(CALLGRIND_WAIT == 0)
-	{
-		CALLGRIND_WAIT = SDL_GetTicks();
-	}
-	else if(SDL_GetTicks() - CALLGRIND_WAIT >= 20000)
-	{
-		//cws_running = false;
-	}
 }
 
 void cws_close()

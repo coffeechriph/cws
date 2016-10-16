@@ -11,6 +11,8 @@ cwsMaterial material;
 cwsShader shader;
 mat4 ortho;
 
+//Used to store the last global mouse state
+i32 last_global_mouse_state[3] = {0,0,0};
 i32 internal_mouse_states[3] = {0,0,0};
 typedef enum
 {
@@ -855,8 +857,13 @@ void surface_events_released(cwsGuiSurface *s, vec2 mouse)
 
 void cwsGuiUpdate()
 {
+    if(get_mouse_state(0) != 0)
+    {
+        last_global_mouse_state[0] = get_mouse_state(0);
+    }
+    
     //Register internal mouse events
-    if (get_mouse_state(0) == MOUSE_PRESSED)
+    if (last_global_mouse_state[0] == MOUSE_PRESSED)
     {
         if(internal_mouse_states[0] == GMOUSE_NONE || internal_mouse_states[0] == GMOUSE_RELEASED)
         {
@@ -867,7 +874,7 @@ void cwsGuiUpdate()
             internal_mouse_states[0] = GMOUSE_DOWN;
         }
     }
-    //Kcwsp the released event only for 1 frame!
+    //Keep the released event only for 1 frame!
     else if(internal_mouse_states[0] != GMOUSE_RELEASED)
     {
         internal_mouse_states[0] = GMOUSE_RELEASED;
@@ -877,6 +884,8 @@ void cwsGuiUpdate()
         internal_mouse_states[0] = GMOUSE_NONE;
     }
 
+    vec2 mp = get_mouse_position();
+    bool reset = false;
     for(u32 i = 0; i < visible_surfaces.length; ++i)
     {
         update_surface_component_data(visible_surfaces.data[i]);
@@ -893,6 +902,19 @@ void cwsGuiUpdate()
         {
             surface_events_released(visible_surfaces.data[i], get_mouse_position());
         }
+        
+        if(!(mp.x < visible_surfaces.data[i]->transform->pos.x ||
+             mp.x > visible_surfaces.data[i]->transform->pos.x + visible_surfaces.data[i]->transform->size.x ||
+             mp.y < visible_surfaces.data[i]->transform->pos.y ||
+             mp.y > visible_surfaces.data[i]->transform->pos.y + visible_surfaces.data[i]->transform->size.y))
+        {
+            reset = true;
+        }
+    }
+    
+    if(reset)
+    {
+        reset_mouse_state();
     }
 }
 
