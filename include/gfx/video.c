@@ -17,7 +17,7 @@ u32 gl_filters[] = {
 void cwsVideoInit()
 {
     cwsShaderInit(text_shader);
-	cwsShaderFromfile(&text_shader, "./data/shaders/text_v", "./data/shaders/text_f");
+	cwsShaderFromfile(&text_shader, "./data/shaders/text_v", "./data/shaders/text_f", SH_NONE);
 
     cwsMaterialInit(text_material);
 	text_material.shader = text_shader;
@@ -917,7 +917,99 @@ bool cwsShaderFromsrc(cwsShader* shader, const char *vertex_src, const char *fra
     return true;
 }
 
-bool cwsShaderFromfile(cwsShader *shader, const char *vertex_file, const char *frag_file)
+void cwsShaderCreateUniform(cwsShader *s, const char *name)
+{
+    cws_array_push(s->uniforms, glGetUniformLocation(s->id, name));
+    cws_string st = cws_string();
+    cws_string_build(&st, name);
+    cws_array_push(s->unames, st);
+}
+
+void cwsShaderBufferUniform(cwsShader *s, const char *name, f32 *values, i32 length)
+{
+    u32 id = -1;
+    for(u32 i = 0; i < s->unames.length; ++i)
+    {
+        if(strcmp((const char *)s->unames.data[i].data, name) == 0)
+        {
+            id = s->uniforms.data[i];
+            break;
+        }
+    }
+    
+    if(id >= 0)
+    {
+        switch(length)
+        {
+            case 1:
+            glUniform1f(id, values[0]);
+            break;
+            case 2:
+            glUniform2f(id, values[0], values[1]);
+            break;
+            case 3:
+            glUniform3f(id, values[0], values[1], values[2]);
+            break;
+            case 4: 
+            glUniform4f(id, values[0], values[1], values[2], values[3]);
+            break;
+            case 9:
+            glUniformMatrix3fv(id, 1, false, values);
+            break;
+            case 16:
+            glUniformMatrix4fv(id, 1, false, values);
+            break;
+        }
+    }
+}
+
+const char *lighting_header = 
+"#version 330\nlayout (std140) uniform LightData"
+"{"
+    "vec4 ambient_light;"
+    "vec4 lights_count;"
+    "mat4 shadow_matrices_lod[4];"
+    "mat4 spotlight_matrices[8];"
+    "vec4 dirlights_dir[2];"
+    "vec4 dirlights_color[2];"
+    "vec4 pointlights_pos[16];"
+    "vec4 pointlights_intensity[16];"
+    "vec4 spotlights_pos[16];"
+    "vec4 spotlights_dir[16];"
+    "vec4 spotlights_intensity[16];"
+    "vec4 spotlights_conedata[16];"
+"};"
+"vec3 cwsLightingColor(vec3 pos, vec3 normal)"
+"{"
+"vec3 c = vec3(1,1,1);"
+"for(int i = 0; i < lights_count.x; ++i){"
+	"vec3 p = -dirlights_dir[i].xyz;"
+	"vec3 n = normal;"
+
+     "c = mix(c,(dirlights_color[i].xyz * max(dot(n,p), 0.0f)), 0.5);"
+"}"
+"for(int i = 0; i < lights_count.y; ++i){"
+    "vec3 p = pointlights_pos[i].xyz-pos;"
+    "vec3 n = normal;"
+    "float d = distance(pointlights_pos[i].xyz,pos);"
+    "float att = pointlights_intensity[i].w / (1.0f + 0.1f*d + 0.01f*(d*d));"
+    "c *= pointlights_intensity[i].xyz * att * clamp(dot(n,p) / (length(p) * length(n)), 0.0, 1.0);"
+"}"
+"for(int i = 0; i < lights_count.z; ++i){"
+    "vec3 p = spotlights_pos[i].xyz-pos;"
+	"vec3 n = normal;"
+	"float d = distance(spotlights_pos[i].xyz,pos);"
+	"float att = clamp((spotlights_intensity[i].w / (1.0f + 0.1f*d + 0.01f*(d*d))), 0.0f, 2.0f);"
+	"float inner_cutoff = spotlights_conedata[i].x;"
+	"float outer_cutoff = spotlights_conedata[i].x - spotlights_conedata[i].y;"
+	"float cos_angle = dot(normalize(-spotlights_dir[i].xyz), normalize(p));"
+	"float falloff = clamp((cos_angle - outer_cutoff) / (inner_cutoff-outer_cutoff), 0.0f, 1.0f);"
+    "c = mix(c, (spotlights_intensity[i].xyz * clamp((dot(n,p) / (length(p) * length(n))), 0, 1)) * falloff * att, 0.5f);"
+"}"
+"return c;"
+"}";
+
+bool cwsShaderFromfile(cwsShader *shader, const char *vertex_file, const char *frag_file, i32 hflags)
 {
 	shader->id = glCreateProgram();
 
@@ -927,11 +1019,23 @@ bool cwsShaderFromfile(cwsShader *shader, const char *vertex_file, const char *f
 
 	if(vertex != NULL && fragment != NULL)
 	{
-		i32 vid = glCreateShader(GL_VERTEX_SHADER);
+        //Calculate size of full shader program including any precreated headers
+        i32 full_length = flength + (((hflags & SH_LIGHTING) != 0) ? (i32)strlen(lighting_header) : 0);
+        char *full_frag = malloc(sizeof(char) * full_length); 
+        
+        i32 offset = 0;
+        if(hflags & SH_LIGHTING)
+        {
+            strncpy(full_frag, lighting_header, (i32)strlen(lighting_header));
+            offset += strlen(lighting_header);
+        }
+        
+        strcpy(full_frag+(sizeof(char)*offset), fragment);
+        i32 vid = glCreateShader(GL_VERTEX_SHADER);
 		i32 fid = glCreateShader(GL_FRAGMENT_SHADER);
-
+        
 		glShaderSource(vid, 1, (const char**)&vertex, &vlength);
-		glShaderSource(fid, 1, (const char**)&fragment, &flength);
+        glShaderSource(fid, 1, (const char**)&full_frag, &full_length);
 
 		glCompileShader(vid);
 
@@ -969,7 +1073,9 @@ bool cwsShaderFromfile(cwsShader *shader, const char *vertex_file, const char *f
 		glDetachShader(shader->id, fid);
 		glDeleteShader(vid);
 		glDeleteShader(fid);
-	}
+
+        free(full_frag);
+    }
 
 	free(vertex);
 	free(fragment);
@@ -989,6 +1095,8 @@ void cwsDeleteShader(cwsShader *shader)
     shader->view_id = 0;
     shader->model_id = 0;
     shader->projection_id = 0;
+    cws_array_free(shader->unames);
+    cws_array_free(shader->uniforms);
 }
 
 void cwsDeleteMaterial(cwsMaterial *mat)

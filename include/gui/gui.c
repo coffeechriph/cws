@@ -51,7 +51,7 @@ void cwsGuiInit()
     surface_skin.outline_size        = 2;
 
     cwsShaderInit(shader);
-    cwsShaderFromfile(&shader, "./data/shaders/gui_v", "./data/shaders/gui_f");
+    cwsShaderFromfile(&shader, "./data/shaders/gui_v", "./data/shaders/gui_f", SH_NONE);
 
     cwsMaterialInit(material);
     material.shader = shader;

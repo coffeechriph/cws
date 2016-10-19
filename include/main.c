@@ -19,7 +19,7 @@ int main(int args, char *argv[])
     cwsMaterialInit(mat);
     mat.rflags = RF_NONE;
     
-    cwsShaderFromfile(&mat.shader, "./data/shaders/single_v", "./data/shaders/single_f");
+    cwsShaderFromfile(&mat.shader, "./data/shaders/single_v", "./data/shaders/single_f", SH_NONE);
     cwsTexture2D tex;
     
     cwsTextureFromfile(&tex, "./data/gfx/tree1.png", IF_NEAREST);

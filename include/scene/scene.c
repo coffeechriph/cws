@@ -1076,7 +1076,7 @@ cwsTerrain_Base *terrain_from_height_image(i32 chunks_x, i32 chunks_y, const cha
 	data->scale = (vec3){.x = 1, .y = 1, .z = 1};
 	data->rotation = (quat){.x = 0, .y = 0, .z = 0, .w = 1};
     cwsMaterialInit(data->material);
-    cwsShaderFromfile(&data->material.shader, "./data/shaders/single_v", "./data/shaders/single_f");                                
+    cwsShaderFromfile(&data->material.shader, "./data/shaders/single_v", "./data/shaders/single_f", SH_NONE);                                
     cwsTexture2D tex0;
     cwsTextureFromfile(&tex0, "./data/gfx/tex.jpg", IF_LINEAR);
     cwsMaterialAddTexture(&data->material, tex0);

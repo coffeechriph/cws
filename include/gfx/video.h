@@ -36,6 +36,13 @@ typedef enum
     RF_NO_DEPTH_TEST = 4
 } RenderingFlags;
 
+typedef enum
+{
+    SH_NONE = 0,
+    SH_LIGHTING = 1,
+    SH_SHADOWS = 2
+} ShaderHeaderFlags;
+
 typedef struct
 {
 	ivec2 size;
@@ -45,12 +52,9 @@ typedef struct
 typedef struct
 {
 	u32 id;
-
-	//These uniforms are common-used uniforms which every shader more of less makes use of
-	u32 mvp_id;
-	u32 view_id;
-	u32 model_id;
-	u32 projection_id;
+    u32 mvp_id, view_id, model_id, projection_id;
+    cws_array(u32, uniforms);
+    cws_array(cws_string, unames);
 } cwsShader;
 
 typedef struct
@@ -234,8 +238,10 @@ void cwsVideoDestroy();
 
 void cwsClearColor(vec3 color);
 
-bool cwsShaderFromfile(cwsShader* s, const char *vertex_file, const char *fragment_file);
+bool cwsShaderFromfile(cwsShader* s, const char *vertex_file, const char *fragment_file, i32 hflags);
 bool cwsShaderFromsrc(cwsShader* s, const char *vertex_src, const char *fragment_src);
+void cwsShaderCreateUniform(cwsShader *s, const char *name);
+void cwsShaderBufferUniform(cwsShader *s, const char *name, f32 *values, i32 length);
 void cwsDeleteShader(cwsShader *shader);
 
 bool cwsTextureFromfile(cwsTexture2D *tex, const char *file, i32 filter);

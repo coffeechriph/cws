@@ -10,4 +10,5 @@ typedef struct { u32 length; char *data;} cws_string;
 void cws_string_build(cws_string *s, const char *s2);
 void cws_string_copy(cws_string *dest, cws_string *src);
 void cws_string_free(cws_string* s);
+bool cws_string_cmp(cws_string *s1, cws_string *s2);
 #endif

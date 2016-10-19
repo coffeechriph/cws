@@ -60,6 +60,24 @@ void cws_string_copy(cws_string *dest, cws_string *src)
 	}
 }
 
+bool cws_string_cmp(cws_string *s1, cws_string *s2)
+{
+    if(s1->length != s2->length)
+    {
+        return false;
+    }
+    
+    for(u32 i = 0; i < s1->length; ++i)
+    {
+        if(s1->data[i] != s2->data[i])
+        {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
 void cws_string_free(cws_string* s)
 {
 	s->length = 0;

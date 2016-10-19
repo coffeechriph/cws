@@ -41,7 +41,7 @@ TODO
     ?Fully implement vector/matrix/quat functionality
 -Make shadows optional for dirlights
     -Implement a shader system which allows for choosing what basic features to use (shadows,texture,lighting)
--Custom shader uniforms
++Custom shader uniforms
 -Sound
 - Add renderer.make_static() which would put the renderers material & mesh into a list and pair it with a list of static model matrices
   The static renderers model matrix will be set once when make_static() is called - this reduces cpu usage of always updating renderers even if they never move.
@@ -71,7 +71,13 @@ TODO
 -Effort to make project compatible with a c compiler (preparation for jai)
 	-Functions to get filesystem information (directories,files...)
 	-(possible build an abstraction layer which would simplify luajit binding creations for custom scripting support)
--Support adding cwsTexts to cwsGuiSurface
--Implement cwsGuiTextbox
--Implement cwsGuiImage
--Implement cwsGuiMeshView
++Support adding cwsTexts to cwsGuiSurface
+-Implement more gui components (cwsGuiTextbox, cwsGuiImage, cwsGuiMeshView, cwsGuiListBox)
+
+
+______
+SHADER SYSTEM
+glsl library that is included by shaders at creation stage
+
+outColor = texture(tex0, Uv);
+outColor = mix(cwsLightColor(), cwsShadowFactor(), 0.5);
