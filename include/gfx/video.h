@@ -39,8 +39,9 @@ typedef enum
 typedef enum
 {
     SH_NONE = 0,
-    SH_LIGHTING = 1,
-    SH_SHADOWS = 2
+    SH_DEFAULT = 1,
+    SH_LIGHTING = 2,
+    SH_SHADOWS = 3
 } ShaderHeaderFlags;
 
 typedef struct
