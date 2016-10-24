@@ -75,7 +75,10 @@ typedef struct
 	vec3 color;
 	f32 radius;
 
-	i32 __padding;
+    u32 frame_buffer;
+    u32 frame_buffer_texture;
+    mat4 proj;
+    mat4 view[6];
 } cwsPointLight;
 
 typedef struct
@@ -91,7 +94,6 @@ typedef struct
 	u32 frame_buffer;
 	u32 frame_buffer_texture;
 
-	i32 __padding[4];
 } cwsSpotLight;
 
 /*

@@ -36,14 +36,6 @@ typedef enum
     RF_NO_DEPTH_TEST = 4
 } RenderingFlags;
 
-typedef enum
-{
-    SH_NONE = 0,
-    SH_DEFAULT = 1,
-    SH_LIGHTING = 2,
-    SH_SHADOWS = 3
-} ShaderHeaderFlags;
-
 typedef struct
 {
 	ivec2 size;
@@ -239,8 +231,8 @@ void cwsVideoDestroy();
 
 void cwsClearColor(vec3 color);
 
-bool cwsShaderFromfile(cwsShader* s, const char *vertex_file, const char *fragment_file, i32 hflags);
-bool cwsShaderFromsrc(cwsShader* s, const char *vertex_src, const char *fragment_src);
+bool cwsShaderFromfile(cwsShader* s, const char *vertex_file, const char *fragment_file, const char *geom_file);
+bool cwsShaderFromsrc(cwsShader* s, const char *vertex_src, const char *fragment_src, const char *geom_src);
 void cwsShaderCreateUniform(cwsShader *s, const char *name);
 void cwsShaderBufferUniform(cwsShader *s, const char *name, f32 *values, i32 length);
 void cwsDeleteShader(cwsShader *shader);

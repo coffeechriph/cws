@@ -69,6 +69,7 @@ vec4 vec4_add(vec4 v1, vec4 v2);
 vec2 vec2_sub(vec2 v1, vec2 v2);
 vec4 vec4_sub(vec4 v1, vec4 v2);
 vec2 vec2_mul(vec2 v1, vec2 v2);
+vec2 vec2_mul_scalar(vec2 v1, f32 f);
 vec4 vec4_mul(vec4 v1, vec4 v2);
 
 vec3    vec3_transform(vec3 v1, mat4 m);

@@ -17,7 +17,7 @@ u32 gl_filters[] = {
 void cwsVideoInit()
 {
     cwsShaderInit(text_shader);
-	cwsShaderFromfile(&text_shader, "./data/shaders/text_v", "./data/shaders/text_f", SH_NONE);
+    cwsShaderFromfile(&text_shader, "./data/shaders/text_v", "./data/shaders/text_f", NULL);
 
     cwsMaterialInit(text_material);
 	text_material.shader = text_shader;
@@ -860,7 +860,7 @@ void cwsDeleteImage(cwsImage2D *im)
     im->pixels = NULL;
 }
 
-bool cwsShaderFromsrc(cwsShader* shader, const char *vertex_src, const char *fragment_src)
+bool cwsShaderFromsrc(cwsShader* shader, const char *vertex_src, const char *fragment_src, const char *geom_src)
 {
 	shader->id = glCreateProgram();
 
@@ -893,6 +893,24 @@ bool cwsShaderFromsrc(cwsShader* shader, const char *vertex_src, const char *fra
 		}		
 		infoLength = 0;
 
+        i32 gid = 0;
+        if(geom_src != NULL)
+        {
+            gid = glCreateShader(GL_GEOMETRY_SHADER);
+            glShaderSource(gid, 1, (const char **)&geom_src, NULL);
+         
+            glCompileShader(gid);
+            glGetShaderInfoLog(gid, 1024, &infoLength, infoLog);
+            if(infoLength > 0)
+            {
+                cws_log("Geometry shader error:\n%s\n", infoLog);
+                return false;
+            }		
+            infoLength = 0;
+            
+            glAttachShader(shader->id, gid);
+        }
+        
 		glAttachShader(shader->id, vid);
 		glAttachShader(shader->id, fid);
 		glLinkProgram(shader->id);
@@ -908,6 +926,12 @@ bool cwsShaderFromsrc(cwsShader* shader, const char *vertex_src, const char *fra
 		glDetachShader(shader->id, fid);
 		glDeleteShader(vid);
 		glDeleteShader(fid);
+        
+        if(glIsShader(gid))
+        {
+            glDeleteShader(gid);
+            glDetachShader(shader->id, gid);
+        }
 	}
 
 	shader->mvp_id = glGetUniformLocation(shader->id, "mvp_matrix");
@@ -965,293 +989,266 @@ void cwsShaderBufferUniform(cwsShader *s, const char *name, f32 *values, i32 len
 
 const char *default_fheader =
 "#version 330\n"
-"uniform mat4 model_matrix, view_matrix, projection_matrix, mvp_matrix;"
-"in vec2 Uv;"
-"in vec3 Color;"
-"in vec3 Normal;"
-"in vec3 Pos;"
-"out vec4 FinalColor;";
+"uniform mat4 model_matrix, view_matrix, projection_matrix, mvp_matrix;\n"
+"in vec2 Uv;\n"
+"in vec3 Color;\n"
+"in vec3 Normal;\n"
+"in vec3 Pos;\n"
+"out vec4 FinalColor;\n";
 
 const char *default_vheader =
 "#version 330\n"
-"uniform mat4 model_matrix, view_matrix, projection_matrix, mvp_matrix;"
-"out vec2 Uv;"
-"out vec3 Color;"
-"out vec3 Normal;"
-"out vec3 Pos;";
+"uniform mat4 model_matrix, view_matrix, projection_matrix, mvp_matrix;\n"
+"out vec2 Uv;\n"
+"out vec3 Color;\n"
+"out vec3 Normal;\n"
+"out vec3 Pos;\n";
 
 const char *lighting_fheader =
-"layout (std140) uniform LightData"
-"{"
-    "vec4 ambient_light;"
-    "vec4 lights_count;"
-    "mat4 shadow_matrices_lod[4];"
-    "mat4 spotlight_matrices[8];"
-    "vec4 dirlights_dir[2];"
-    "vec4 dirlights_color[2];"
-    "vec4 pointlights_pos[16];"
-    "vec4 pointlights_intensity[16];"
-    "vec4 spotlights_pos[16];"
-    "vec4 spotlights_dir[16];"
-    "vec4 spotlights_intensity[16];"
-    "vec4 spotlights_conedata[16];"
-"};"
-"vec3 cwsLightingColor(vec3 pos, vec3 normal)"
-"{"
-"vec3 c = vec3(0,0,0);"
-"for(int i = 0; i < lights_count.x; ++i){"
-	"vec3 p = -dirlights_dir[i].xyz;"
-	"vec3 n = normal;"
+"layout (std140) uniform LightData\n"
+"{\n"
+"vec4 ambient_light;\n"
+"vec4 lights_count;\n"
+"mat4 shadow_matrices_lod[4];\n"
+"mat4 spotlight_matrices[8];\n"
+"vec4 dirlights_dir[2];\n"
+"vec4 dirlights_color[2];\n"
+"vec4 pointlights_pos[16];\n"
+"vec4 pointlights_intensity[16];\n"
+"vec4 spotlights_pos[16];\n"
+"vec4 spotlights_dir[16];\n"
+"vec4 spotlights_intensity[16];\n"
+"vec4 spotlights_conedata[16];\n"
+"};\n"
+"vec3 cwsLightingColor(vec3 pos, vec3 normal)\n"
+"{\n"
+"vec3 c = vec3(0,0,0);\n"
+"for(int i = 0; i < lights_count.x; ++i){\n"
+"vec3 p = -dirlights_dir[i].xyz;\n"
+"vec3 n = normal;\n"
 
-    "c += (dirlights_color[i].xyz * max(dot(n,p), 0.0f)) * ambient_light.xyz;"
-"}"
-"for(int i = 0; i < lights_count.y; ++i){"
-    "vec3 p = pointlights_pos[i].xyz-pos;"
-    "vec3 n = normal;"
-    "float d = distance(pointlights_pos[i].xyz,pos);"
-    "float att = pointlights_intensity[i].w / (1.0f + 0.1f*d + 0.01f*(d*d));"
-    "c += pointlights_intensity[i].xyz * att * clamp(dot(n,p) / (length(p) * length(n)), 0.0, 1.0);"
-"}"
-"for(int i = 0; i < lights_count.z; ++i){"
-    "vec3 p = spotlights_pos[i].xyz-pos;"
-	"vec3 n = normal;"
-	"float d = distance(spotlights_pos[i].xyz,pos);"
-	"float att = clamp((spotlights_intensity[i].w / (1.0f + 0.1f*d + 0.01f*(d*d))), 0.0f, 2.0f);"
-	"float inner_cutoff = spotlights_conedata[i].x;"
-	"float outer_cutoff = spotlights_conedata[i].x - spotlights_conedata[i].y;"
-	"float cos_angle = dot(normalize(-spotlights_dir[i].xyz), normalize(p));"
-	"float falloff = clamp((cos_angle - outer_cutoff) / (inner_cutoff-outer_cutoff), 0.0f, 1.0f);"
-    "c += (spotlights_intensity[i].xyz * clamp((dot(n,p) / (length(p) * length(n))), 0, 1)) * falloff * att;"
-"}"
-"return clamp(c, 0.0f, 1.0f);"
-"}";
+"c += (dirlights_color[i].xyz * max(dot(n,p), 0.0f)) * ambient_light.xyz;\n"
+"}\n"
+"for(int i = 0; i < lights_count.y; ++i){\n"
+"vec3 p = pointlights_pos[i].xyz-pos;\n"
+"vec3 n = normal;\n"
+"float d = distance(pointlights_pos[i].xyz,pos);\n"
+"float att = pointlights_intensity[i].w / (1.0f + 0.1f*d + 0.01f*(d*d));\n"
+"c += pointlights_intensity[i].xyz * att * clamp(dot(n,p) / (length(p) * length(n)), 0.0, 1.0);\n"
+"}\n"
+"for(int i = 0; i < lights_count.z; ++i){\n"
+"vec3 p = spotlights_pos[i].xyz-pos;\n"
+"vec3 n = normal;\n"
+"float d = distance(spotlights_pos[i].xyz,pos);\n"
+"float att = clamp((spotlights_intensity[i].w / (1.0f + 0.1f*d + 0.01f*(d*d))), 0.0f, 2.0f);\n"
+"float inner_cutoff = spotlights_conedata[i].x;\n"
+"float outer_cutoff = spotlights_conedata[i].x - spotlights_conedata[i].y;\n"
+"float cos_angle = dot(normalize(-spotlights_dir[i].xyz), normalize(p));\n"
+"float falloff = clamp((cos_angle - outer_cutoff) / (inner_cutoff-outer_cutoff), 0.0f, 1.0f);\n"
+"c += (spotlights_intensity[i].xyz * clamp((dot(n,p) / (length(p) * length(n))), 0, 1)) * falloff * att;\n"
+"}\n"
+"return clamp(c, 0.0f, 1.0f);\n"
+"}\n";
 
 const char *lighting_vheader = 
-"layout (std140) uniform LightData"
-"{"
-"vec4 ambient_light;"
-"vec4 lights_count;"
-"mat4 shadow_matrices_lod[4];"
-"mat4 spotlight_matrices[8];"
-"vec4 dirlights_dir[2];"
-"vec4 dirlights_color[2];"
-"vec4 pointlights_pos[16];"
-"vec4 pointlights_intensity[16];"
-"vec4 spotlights_pos[16];"
-"vec4 spotlights_dir[16];"
-"vec4 spotlights_intensity[16];"
-"vec4 spotlights_conedata[16];"
-"};";
+"layout (std140) uniform LightData\n"
+"{\n"
+"vec4 ambient_light;\n"
+"vec4 lights_count;\n"
+"mat4 shadow_matrices_lod[4];\n"
+"mat4 spotlight_matrices[8];\n"
+"vec4 dirlights_dir[2];\n"
+"vec4 dirlights_color[2];\n"
+"vec4 pointlights_pos[16];\n"
+"vec4 pointlights_intensity[16];\n"
+"vec4 spotlights_pos[16];\n"
+"vec4 spotlights_dir[16];\n"
+"vec4 spotlights_intensity[16];\n"
+"vec4 spotlights_conedata[16];\n"
+"};\n";
 
 const char *shadow_vheader = 
-"out vec4 shadow_lightspace_pos_lod1;"
-"out vec4 shadow_lightspace_pos_lod2;"
-"out vec4 shadow_lightspace_pos_lod3;"
-"out vec4 shadow_lightspace_pos_lod4;"
-"out vec4 EE_spotlights_lightspace_pos[8];"
-"out vec4 P_Pos;"
-"void cwsShadowPass(vec3 pos, vec3 Normal)"
-"{"
-    "shadow_lightspace_pos_lod1 = shadow_matrices_lod[0] * model_matrix * vec4(pos+Normal*0.005f,1.0f);"
-	"shadow_lightspace_pos_lod2 = shadow_matrices_lod[1] * model_matrix * vec4(pos+Normal*0.005f,1.0f);"
-	"shadow_lightspace_pos_lod3 = shadow_matrices_lod[2] * model_matrix * vec4(pos+Normal*0.005f,1.0f);"
-	"shadow_lightspace_pos_lod4 = shadow_matrices_lod[3] * model_matrix * vec4(pos+Normal*0.005f,1.0f);"
+"out vec4 shadow_lightspace_pos_lod1;\n"
+"out vec4 shadow_lightspace_pos_lod2;\n"
+"out vec4 shadow_lightspace_pos_lod3;\n"
+"out vec4 shadow_lightspace_pos_lod4;\n"
+"out vec4 EE_spotlights_lightspace_pos[8];\n"
+"out vec4 P_Pos;\n"
+"void cwsShadowPass(vec3 pos, vec3 Normal)\n"
+"{\n"
+"shadow_lightspace_pos_lod1 = shadow_matrices_lod[0] * model_matrix * vec4(pos+Normal*0.005f,1.0f);\n"
+"shadow_lightspace_pos_lod2 = shadow_matrices_lod[1] * model_matrix * vec4(pos+Normal*0.005f,1.0f);\n"
+"shadow_lightspace_pos_lod3 = shadow_matrices_lod[2] * model_matrix * vec4(pos+Normal*0.005f,1.0f);\n"
+"shadow_lightspace_pos_lod4 = shadow_matrices_lod[3] * model_matrix * vec4(pos+Normal*0.005f,1.0f);\n"
 
-	"for(int i = 0; i < lights_count.z; ++i)"
-	"{"
-		"EE_spotlights_lightspace_pos[i] = spotlight_matrices[i] * model_matrix * vec4(pos,1.0f);"
-	"}"
-"}";
+"for(int i = 0; i < lights_count.z; ++i)\n"
+"{\n"
+"EE_spotlights_lightspace_pos[i] = spotlight_matrices[i] * model_matrix * vec4(pos,1.0f);\n"
+"}\n"
+"}\n";
 
 const char *shadow_fheader = 
-"uniform sampler2D shadow_map;"
-"uniform sampler2D EE_spotlights_shadow_map[8];"
-"in vec4 shadow_lightspace_pos_lod1;"
-"in vec4 shadow_lightspace_pos_lod2;"
-"in vec4 shadow_lightspace_pos_lod3;"
-"in vec4 shadow_lightspace_pos_lod4;"
-"in vec4 EE_spotlights_lightspace_pos[8];"
-"in vec4 P_Pos;"
-"float sample_dirlight_shadow(int index, vec4 l_pos, sampler2D map, float filter_steps, vec2 uv_offset)"
-"{"
-	"vec4 lightspace_pos = l_pos;"
-	"vec3 pcoords = lightspace_pos.xyz / lightspace_pos.w;"
+"uniform sampler2D shadow_map;\n"
+"uniform samplerCube cube_shadow_map[8];\n"
+"uniform sampler2D EE_spotlights_shadow_map[8];\n"
+"uniform float far_plane;\n"
+"in vec4 shadow_lightspace_pos_lod1;\n"
+"in vec4 shadow_lightspace_pos_lod2;\n"
+"in vec4 shadow_lightspace_pos_lod3;\n"
+"in vec4 shadow_lightspace_pos_lod4;\n"
+"in vec4 EE_spotlights_lightspace_pos[8];\n"
+"in vec4 P_Pos;\n"
+"float sample_dirlight_shadow(int index, vec4 l_pos, sampler2D map, float filter_steps, vec2 uv_offset)\n"
+"{\n"
+"vec4 lightspace_pos = l_pos;\n"
+"vec3 pcoords = lightspace_pos.xyz / lightspace_pos.w;\n"
 
-	"float a = 1.0f / 2048.0f;"
-	"pcoords.x = floor(pcoords.x*2048)*a;"
-	"pcoords.y = floor(pcoords.y*2048)*a;"
+"float a = 1.0f / 2048.0f;\n"
+"pcoords.x = floor(pcoords.x*2048)*a;\n"
+"pcoords.y = floor(pcoords.y*2048)*a;\n"
 
-	"vec2 uvc;"
-	"uvc.x = 0.25f * pcoords.x + 0.25f + uv_offset.x;"
-	"uvc.y = 0.25f * pcoords.y + 0.25f + uv_offset.y;"
-	"float z = 0.5f * pcoords.z + 0.5f;"
+"vec2 uvc;\n"
+"uvc.x = 0.25f * pcoords.x + 0.25f + uv_offset.x;\n"
+"uvc.y = 0.25f * pcoords.y + 0.25f + uv_offset.y;\n"
+"float z = 0.5f * pcoords.z + 0.5f;\n"
 
-	"vec3 p = -dirlights_dir[index].xyz;"
-	"vec3 n = Normal;"
+"vec3 p = -dirlights_dir[index].xyz;\n"
+"vec3 n = Normal;\n"
 
-	"float res = 0.0f;"
+"float res = 0.0f;\n"
 
-	"filter_steps *= 1.0f - float(int(z));"
-	"for(float x = -filter_steps; x <= filter_steps; ++x)"
-	"{"
-		"for(float y = -filter_steps; y <= filter_steps; ++y)"
-		"{"
-			"vec2 off = vec2(x,y)*vec2(a,a);"
-			"float depth = texture(map, uvc+off).r;"
-			"if(depth < z)"
-			"{"
-				"res += 1.0f;"
-			"}"
-		"}"
-	"}"
+"filter_steps *= 1.0f - float(int(z));\n"
+"for(float x = -filter_steps; x <= filter_steps; ++x)\n"
+"{\n"
+"for(float y = -filter_steps; y <= filter_steps; ++y)\n"
+"{\n"
+"vec2 off = vec2(x,y)*vec2(a,a);\n"
+"float depth = texture(map, uvc+off).r;\n"
+"if(depth < z)\n"
+"{\n"
+"res += 1.0f;\n"
+"}\n"
+"}\n"
+"}\n"
 	
-	"res /= (filter_steps+filter_steps)*(filter_steps+filter_steps);"
-	"res = clamp(res, 0.0f, 0.25f);"
+"res /= (filter_steps+filter_steps)*(filter_steps+filter_steps);\n"
+"res = clamp(res, 0.0f, 0.25f);\n"
 
-	"return res;"
-"}"
-"float cwsShadowFactor(vec3 fpos)"
-"{"
+"return res;\n"
+"}\n"
+"float cwsShadowFactor(vec3 fpos)\n"
+"{\n"
 	/*
 	    Sample shadows for the directional light
         Frustum splits are chosen depending on the bounds of a sphere as our frustum splits are fit inside a sphere and not a box.
 		Sphere eq = x^2+y^2+z^2 = r^2
      */
-	"float factor = 0.0f;"
-	"float P_Pos_sqr = (P_Pos.x*P_Pos.x)+(P_Pos.y*P_Pos.y)+(P_Pos.z*P_Pos.z);"
+"float factor = 0.0f;\n"
+"float P_Pos_sqr = (P_Pos.x*P_Pos.x)+(P_Pos.y*P_Pos.y)+(P_Pos.z*P_Pos.z);\n"
 
-	"float asd = clamp(P_Pos_sqr, 0.0f, 4096.0f);"
-	"int ind = clamp(int(step(asd,63) + step(asd,255) + step(asd,1023)), 0, 3);"
+"float asd = clamp(P_Pos_sqr, 0.0f, 4096.0f);\n"
+"int ind = clamp(int(step(asd,63) + step(asd,255) + step(asd,1023)), 0, 3);\n"
 
-	"vec4 dirlight_lsp[4]; "
-	"dirlight_lsp[0] = shadow_lightspace_pos_lod4;"
-	"dirlight_lsp[1] = shadow_lightspace_pos_lod3;"
-	"dirlight_lsp[2] = shadow_lightspace_pos_lod2;"
-	"dirlight_lsp[3] = shadow_lightspace_pos_lod1;"
+"vec4 dirlight_lsp[4];\n"
+"dirlight_lsp[0] = shadow_lightspace_pos_lod4;\n"
+"dirlight_lsp[1] = shadow_lightspace_pos_lod3;\n"
+"dirlight_lsp[2] = shadow_lightspace_pos_lod2;\n"
+"dirlight_lsp[3] = shadow_lightspace_pos_lod1;\n"
 
-	"vec2 cascade_offsets[4];"
-	"cascade_offsets[0] = vec2(0.5,0.5);"
-	"cascade_offsets[1] = vec2(0.0,0.5);"
-	"cascade_offsets[2] = vec2(0.5,0.0);"
-	"cascade_offsets[3] = vec2(0.0,0.0);"
+"vec2 cascade_offsets[4];\n"
+"cascade_offsets[0] = vec2(0.5,0.5);\n"
+"cascade_offsets[1] = vec2(0.0,0.5);\n"
+"cascade_offsets[2] = vec2(0.5,0.0);\n"
+"cascade_offsets[3] = vec2(0.0,0.0);\n"
 
-	"factor += sample_dirlight_shadow(0, dirlight_lsp[ind], shadow_map, 1, cascade_offsets[ind]);"
+"factor += sample_dirlight_shadow(0, dirlight_lsp[ind], shadow_map, 1, cascade_offsets[ind]);\n"
 
+/*
+Sample shadows for point lights
+*/
+"for(int i = 0; i < clamp(lights_count.y, 0, 8); ++i)\n"
+"{\n"
+"vec3 ftl = fpos - pointlights_pos[i].xyz;\n"
+"float closestDepth= texture(cube_shadow_map[i], ftl).r;\n"
+"closestDepth *= 1000.0;\n"
+"float currDepth = length(ftl);\n"
+"float bias = 0.05;\n"
+"factor += currDepth - bias > closestDepth ? 1.0 : 0.0;\n"
+"}\n"
     /*
         Sample shadows for spot lights
     */
-"for(int i = 0; i < lights_count.z; ++i)"
-"{"
-		"vec4 lightspace_pos = EE_spotlights_lightspace_pos[i];"
-		"vec3 pcoords = lightspace_pos.xyz / lightspace_pos.w;"
-		"vec2 uvc;"
-		"uvc.x = 0.5f * pcoords.x + 0.5f;"
-		"uvc.y = 0.5f * pcoords.y + 0.5f;"
-		"float z = (pcoords.z + 1.0f) + 1.0f;"
+"for(int i = 0; i < lights_count.z; ++i)\n"
+"{\n"
+"vec4 lightspace_pos = EE_spotlights_lightspace_pos[i];\n"
+"vec3 pcoords = lightspace_pos.xyz / lightspace_pos.w;\n"
+"vec2 uvc;\n"
+"uvc.x = 0.5f * pcoords.x + 0.5f;\n"
+"uvc.y = 0.5f * pcoords.y + 0.5f;\n"
+"float z = (pcoords.z + 1.0f) + 1.0f;\n"
 
-		"vec3 p = spotlights_pos[i].xyz-fpos;"
-		"vec3 n = normalize(Normal);"
-		"float d = distance(spotlights_pos[i].xyz,fpos);"
-		"float att = (spotlights_intensity[i].w*0.25f / (1.0f + 0.1f*d + 0.01f*(d*d)));"
+"vec3 p = spotlights_pos[i].xyz-fpos;\n"
+"vec3 n = normalize(Normal);\n"
+"float d = distance(spotlights_pos[i].xyz,fpos);\n"
+"float att = (spotlights_intensity[i].w*0.25f / (1.0f + 0.1f*d + 0.01f*(d*d)));\n"
 
-		"float inner_cutoff = spotlights_conedata[i].x;"
-		"float outer_cutoff = spotlights_conedata[i].x - spotlights_conedata[i].y;"
-		"float cos_angle = dot(normalize(-spotlights_dir[i].xyz), normalize(p));"
+"float inner_cutoff = spotlights_conedata[i].x;\n"
+"float outer_cutoff = spotlights_conedata[i].x - spotlights_conedata[i].y;\n"
+"float cos_angle = dot(normalize(-spotlights_dir[i].xyz), normalize(p));\n"
 
-		"float falloff = clamp((cos_angle - outer_cutoff) / (inner_cutoff-outer_cutoff), 0.0f, 1.0f);"
-		"float intensity = clamp((dot(n,p) / (length(p) * length(n))), 0, 1);"
+"float falloff = clamp((cos_angle - outer_cutoff) / (inner_cutoff-outer_cutoff), 0.0f, 1.0f);\n"
+"float intensity = clamp((dot(n,p) / (length(p) * length(n))), 0, 1);\n"
 
-		"z = clamp(z, 0.0f, 1.0f);"
+"z = clamp(z, 0.0f, 1.0f);\n"
 
-		"float res = 0.0f;"
-		"for(int x = -1; x <= 1; ++x)"
-		"{"
-			"for(int y = -1; y <= 1; ++y)"
-			"{"
-				"vec2 off = vec2(x,y) / vec2(1024,1024);"
-			"}"
-		"}"
-		"res /= 9.0f;"
-		"factor += res;"
-"}"
-    "return (1.0f - clamp(factor, 0.0f, 1.0f));"
-"}";
+"float res = 0.0f;\n"
+"for(int x = -1; x <= 1; ++x)\n"
+"{\n"
+"for(int y = -1; y <= 1; ++y)\n"
+"{\n"
+"vec2 off = vec2(x,y) / vec2(1024,1024);\n"
+"}\n"
+"}\n"
+"res /= 9.0f;\n"
+"factor += res;\n"
+"}\n"
+"return (1.0f - clamp(factor, 0.0f, 1.0f));\n"
+"}\n";
 
-bool cwsShaderFromfile(cwsShader *shader, const char *vertex_file, const char *frag_file, i32 hflags)
+bool cwsShaderFromfile(cwsShader *shader, const char *vertex_file, const char *frag_file, const char *geom_file)
 {
 	shader->id = glCreateProgram();
 
-	i32 vlength = 0, flength = 0;
+	i32 vlength = 0, flength = 0, glength = 0;
 	char *vertex = cwsReadFile(vertex_file, &vlength);
 	char *fragment = cwsReadFile(frag_file, &flength);
+    char *geom = (geom_file != NULL) ? cwsReadFile(geom_file, &glength) : NULL;
 
 	if(vertex != NULL && fragment != NULL)
 	{
-        //Calculate size of full shader program including any precreated headers
-        
-        //Vertex shader
-        i32 vfull_length = vlength +
-            (((hflags & SH_DEFAULT) != 0) ? (i32)strlen(default_vheader) : 0) +
-            (((hflags & SH_LIGHTING) != 0) ? (i32)strlen(lighting_vheader) : 0) +
-            (((hflags & SH_SHADOWS) != 0) ? (i32)strlen(shadow_vheader) : 0);
-        
-        char *full_vert = malloc(sizeof(char) * vfull_length); 
-        
-        i32 voffset = 0;
-       
-        if(hflags & SH_DEFAULT)
-        { 
-            strncpy(full_vert, default_vheader, (i32)strlen(default_vheader));
-            voffset += strlen(default_vheader);
-        }
-        
-        if(hflags & SH_LIGHTING)
-        {
-            strncpy(full_vert+voffset, lighting_vheader, (i32)strlen(lighting_vheader));
-            voffset += strlen(lighting_vheader);
-        }
-        
-        if(hflags & SH_SHADOWS)
-        {
-            strncpy(full_vert+voffset, shadow_vheader, (i32)strlen(shadow_vheader));
-            voffset += strlen(shadow_vheader);
-        }
-        
-        strcpy(full_vert+(sizeof(char)*voffset), vertex);
-        
-        //Fragment shader
-        i32 full_length = flength +
-            (((hflags & SH_DEFAULT) != 0) ? strlen(default_fheader) : 0) +
-            (((hflags & SH_LIGHTING) != 0) ? (i32)strlen(lighting_fheader) : 0) +
-            (((hflags & SH_SHADOWS) != 0) ? (i32)strlen(shadow_fheader) : 0);
-        char *full_frag = malloc(sizeof(char) * full_length); 
-        
-        i32 offset = 0;
-        
-        if(hflags & SH_DEFAULT)
-        {
-            strncpy(full_frag, default_fheader, (i32)strlen(default_fheader));
-            offset += strlen(default_fheader);
-        }
-        
-        if(hflags & SH_LIGHTING)
-        {
-            strncpy(full_frag+offset, lighting_fheader, (i32)strlen(lighting_fheader));
-            offset += strlen(lighting_fheader);
-        }
-        
-        if(hflags & SH_SHADOWS)
-        {
-            strncpy(full_frag+offset, shadow_fheader, (i32)strlen(shadow_fheader));
-            offset += strlen(shadow_fheader);
-        }
-        
-        strcpy(full_frag+(sizeof(char)*offset), fragment);
         i32 vid = glCreateShader(GL_VERTEX_SHADER);
 		i32 fid = glCreateShader(GL_FRAGMENT_SHADER);
         
-		glShaderSource(vid, 1, (const char**)&full_vert, &vfull_length);
-        glShaderSource(fid, 1, (const char**)&full_frag, &full_length);
+		glShaderSource(vid, 1, (const char**)&vertex, &vlength);
+        glShaderSource(fid, 1, (const char**)&fragment, &flength);
+        
+        i32 gid = 0;
+        if(geom != NULL)
+        {
+            gid = glCreateShader(GL_GEOMETRY_SHADER);
+            glShaderSource(gid, 1, (const char **)&geom, &glength);
+            glCompileShader(gid);
+
+            char infoLog[1024];
+            i32 infoLength = 0;
+            glGetShaderInfoLog(gid, 1024, &infoLength, infoLog);
+            if(infoLength > 0)
+            {
+                cws_log("%s geometry shader error:\n%s\n", geom_file, infoLog);
+                return false;
+            }
+            infoLength = 0;
+        }
 
 		glCompileShader(vid);
 
@@ -1276,6 +1273,7 @@ bool cwsShaderFromfile(cwsShader *shader, const char *vertex_file, const char *f
 
 		glAttachShader(shader->id, vid);
 		glAttachShader(shader->id, fid);
+        if(glIsShader(gid)) glAttachShader(shader->id, gid);
 		glLinkProgram(shader->id);
 
 		glGetProgramInfoLog(shader->id, 1024, &infoLength, infoLog);
@@ -1289,8 +1287,6 @@ bool cwsShaderFromfile(cwsShader *shader, const char *vertex_file, const char *f
 		glDetachShader(shader->id, fid);
 		glDeleteShader(vid);
 		glDeleteShader(fid);
-
-        free(full_frag);
     }
 
 	free(vertex);
