@@ -574,7 +574,8 @@ void cwsSceneInit()
                      NULL);
     cwsMaterialInit(shadow_material);
 	shadow_material.shader = shadow_shader;
-
+    shadow_material.rflags = RF_CULL_FRONT;
+    
     cwsShaderInit(shadow_shader_animated);
 	cwsShaderFromsrc(&shadow_shader_animated, 
                      "#version 330\n"
@@ -616,7 +617,8 @@ void cwsSceneInit()
                      NULL);
     cwsMaterialInit(shadow_material_animated);
 	shadow_material_animated.shader = shadow_shader_animated;
-
+    shadow_material_animated.rflags = RF_CULL_FRONT;
+    
     cwsShaderInit(shadow_shader_cubemap);
     cwsShaderFromsrc(&shadow_shader_cubemap,
                      "#version 330\n"
@@ -660,6 +662,7 @@ void cwsSceneInit()
                      "}"
                      "}");
     cwsMaterialInit(shadow_material_cubemap);
+    shadow_material_cubemap.rflags = RF_CULL_FRONT;
     shadow_material_cubemap.shader = shadow_shader_cubemap;
     
     cwsShaderCreateUniform(&shadow_material_cubemap.shader, "far_plane");
@@ -804,8 +807,6 @@ void ee_update_lights()
         glBindFramebuffer(GL_FRAMEBUFFER, csm_data.frame_buffer);
         cwsBindMaterial(&shadow_material);
 		glColorMaski(csm_data.frame_buffer, 1, 0, 0, 0);
-		glEnable(GL_CULL_FACE);
-		glCullFace(GL_FRONT);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		u32 x = 0, y = 0;
@@ -958,8 +959,8 @@ void ee_update_lights()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glViewport(0,0,256,256);
         cwsBindMaterial(&shadow_material_cubemap);
-        pointlights.data[i]->proj = mat4_perspective(1, 1, 90, 1.0f, 1000); 
-        f32 farPlane = 1000.0f;
+        pointlights.data[i]->proj = mat4_perspective(1, 1, 90, 1.0f, pointlights.data[i]->radius*8); 
+        f32 farPlane = pointlights.data[i]->radius*8;
         cwsShaderBufferUniform(&shadow_material_cubemap.shader, "far_plane", &farPlane, 1);
         f32 pp[3] = {pointlights.data[i]->pos.x, pointlights.data[i]->pos.y, pointlights.data[i]->pos.z};
         cwsShaderBufferUniform(&shadow_material_cubemap.shader, "lightPos", pp, 3);

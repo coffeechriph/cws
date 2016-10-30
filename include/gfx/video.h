@@ -31,9 +31,10 @@ typedef enum
 typedef enum
 {
 	RF_NONE = 0,
-	RF_CULLING_ENABLED = 1,
-	RF_WIREFRAME_ENABLED = 2,
-    RF_NO_DEPTH_TEST = 4
+	RF_CULL_FRONT = 1,
+    RF_CULL_BACK = 2,
+	RF_WIREFRAME_ENABLED = 4,
+    RF_NO_DEPTH_TEST = 8
 } RenderingFlags;
 
 typedef struct
@@ -220,7 +221,7 @@ struct cwsTextContext
     .texture_array.length = 0, \
      .texture_uniforms.data = NULL, \
     .texture_uniforms.data = 0, \
-    .rflags = RF_CULLING_ENABLED}
+    .rflags = RF_CULL_BACK}
 
 #define cwsTexture2DArrayInit(a) (a = (Texture2DArray){.size = (ivec2){.x=0,.y=0},.images_size = 0, .images_count = 0, .images = NULL }; glGenTextures(1, &a.id))
 extern SDL_Window *main_window;

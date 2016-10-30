@@ -45,6 +45,11 @@ vec2 vec2_mul(vec2 v1, vec2 v2)
     return (vec2) {.x = v1.x * v2.x, .y = v1.y * v2.y};
 }
 
+vec2 vec2_mul_scalar(vec2 v1, f32 f)
+{
+    return (vec2) {.x = v1.x * f, .y = v1.y * f};
+}
+
 vec4 vec4_mul(vec4 v1, vec4 v2)
 {
     return (vec4) { .x = v1.x*v2.x, .y = v1.y*v2.y, .z = v1.z*v2.z, .w = v1.w*v2.w };

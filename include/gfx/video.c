@@ -1358,10 +1358,16 @@ void cwsBindMaterial(cwsMaterial *mat)
 		glBindTexture(GL_TEXTURE_2D, 0);
 	}
 
-	if((mat->rflags & RF_CULLING_ENABLED))
+	if((mat->rflags & RF_CULL_FRONT))
 	{
 		glEnable(GL_CULL_FACE);
+        glCullFace(GL_FRONT);
 	}
+    else if((mat->rflags & RF_CULL_BACK))
+    {
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+    }
 	else
 	{
 		glDisable(GL_CULL_FACE);
