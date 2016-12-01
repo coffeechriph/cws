@@ -25,8 +25,8 @@ typedef struct
 	cwsMaterial *material;
 	cwsMesh *mesh;
 
-	cws_bucket_array(cwsRenderer,renderers);
-	cws_bucket_array(cwsRenderer,hidden_renderers);
+	cws_bucket_array(cwsRenderer, 512) renderers;
+	cws_bucket_array(cwsRenderer, 128) hidden_renderers;
 } cwsDrawGroup;
 
 typedef struct
@@ -47,7 +47,7 @@ typedef struct
 	vec3 scale;
 	quat rotation;
 	u32 chunks_size, chunks_count;
-    cws_array(cwsMesh,chunks);
+    cws_array(cwsMesh) chunks;
     cwsMaterial material;
 } cwsTerrain_Base;
 

@@ -15,8 +15,10 @@ int main(int args, char *argv[])
 {
     cws_create(1280, 720, "Game", false);
    
-    cwsMaterial mat;
-    cwsMaterialInit(mat);
+    cwsMaterial m;
+    cwsMaterialFromFile(&m, "./data/testmat.mat");
+    
+    cwsMaterial mat = (cwsMaterial){0};
     mat.rflags = RF_NONE;
     
     cwsShaderFromfile(&mat.shader, "./data/shaders/single_v", "./data/shaders/single_f", NULL);
@@ -29,7 +31,7 @@ int main(int args, char *argv[])
     cwsMeshFromfile(&mesh, "./data/tree1.dae");
     
     f32 _x = -10.0f, _z = -5.0f;
-    for(u32 i = 0; i < 7000; ++i)
+    for(u32 i = 0; i < 100; ++i)
     {
         cwsRenderer *renderer = cwsNewRenderer(&mat,&mesh);
         renderer->position = (vec3){.x = _x, .y = -1.0, .z = _z};

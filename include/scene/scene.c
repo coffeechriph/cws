@@ -1,10 +1,10 @@
 #include "scene.h"
 
-cws_array(cwsDrawGroup, draw_groups);
-cws_array(cwsCamera*,cameras);
-cws_array(cwsDirLight*, dirlights);
-cws_array(cwsPointLight*,pointlights);
-cws_array(cwsSpotLight*,spotlights);
+cws_array(cwsDrawGroup) draw_groups;
+cws_array(cwsCamera*) cameras;
+cws_array(cwsDirLight*) dirlights;
+cws_array(cwsPointLight*) pointlights;
+cws_array(cwsSpotLight*) spotlights;
 
 cwsCamera *active_camera;
 cwsCamera default_camera;
@@ -551,7 +551,7 @@ void cwsSceneInit()
     cws_array_init(cwsPointLight*, pointlights, 0);
     cws_array_init(cwsSpotLight*, spotlights, 0);
     
-    cwsShaderInit(shadow_shader);
+    shadow_shader = (cwsShader){0};
     cwsShaderFromsrc(&shadow_shader,
                      "#version 330\n"
                      "layout(location = 0) in vec3 pos;\n"
@@ -572,11 +572,11 @@ void cwsSceneInit()
                      "out_color = vec4(1.0);\n"
                      "}\n",
                      NULL);
-    cwsMaterialInit(shadow_material);
+    shadow_material = (cwsMaterial){0};
 	shadow_material.shader = shadow_shader;
     shadow_material.rflags = RF_CULL_FRONT;
     
-    cwsShaderInit(shadow_shader_animated);
+    shadow_shader_animated = (cwsShader){0};
 	cwsShaderFromsrc(&shadow_shader_animated, 
                      "#version 330\n"
                      "layout(location = 0) in vec3 pos;\n"
@@ -615,11 +615,11 @@ void cwsSceneInit()
                      "out_color = vec4(1);\n"
                      "}\n",
                      NULL);
-    cwsMaterialInit(shadow_material_animated);
+    shadow_material_animated = (cwsMaterial){0};
 	shadow_material_animated.shader = shadow_shader_animated;
     shadow_material_animated.rflags = RF_CULL_FRONT;
     
-    cwsShaderInit(shadow_shader_cubemap);
+    shadow_shader_cubemap = (cwsShader){0};
     cwsShaderFromsrc(&shadow_shader_cubemap,
                      "#version 330\n"
                      "layout(location = 0) in vec3 pos;\n"
@@ -661,7 +661,7 @@ void cwsSceneInit()
                      "EndPrimitive();\n"
                      "}"
                      "}");
-    cwsMaterialInit(shadow_material_cubemap);
+    shadow_material_cubemap = (cwsMaterial){0};
     shadow_material_cubemap.rflags = RF_CULL_FRONT;
     shadow_material_cubemap.shader = shadow_shader_cubemap;
     
@@ -1194,7 +1194,7 @@ cwsTerrain_Base *terrain_from_height_image(i32 chunks_x, i32 chunks_y, const cha
 	data->position = (vec3){.x = 0, .y = 0, .z = 0};
 	data->scale = (vec3){.x = 1, .y = 1, .z = 1};
 	data->rotation = (quat){.x = 0, .y = 0, .z = 0, .w = 1};
-    cwsMaterialInit(data->material);
+    data->material = (cwsMaterial){0};
     cwsShaderFromfile(&data->material.shader, "./data/shaders/single_v", "./data/shaders/single_f", NULL);
     cwsTexture2D tex0;
     cwsTextureFromfile(&tex0, "./data/gfx/tex.jpg", IF_LINEAR);
@@ -1215,10 +1215,10 @@ cwsTerrain_Base *terrain_from_height_image(i32 chunks_x, i32 chunks_y, const cha
         i32 vx = 0, vy = 0;
 
         //Create vertices
-        cws_array(f32,verts);
+        cws_array(f32) verts;
         cws_array_init(f32,verts,(w+1)*(h+1) * 11);
 
-        cws_array(i32,indices);
+        cws_array(i32) indices;
         cws_array_init(i32,indices,(w+1)*(h+1) * 6);
         for(i32 j = 0; j < (w+1)*(h+1); ++j)
         {

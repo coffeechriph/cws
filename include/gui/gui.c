@@ -1,6 +1,6 @@
 #include "gui.h"
-cws_array(cwsGuiSurface*,visible_surfaces);
-cws_array(cwsGuiSurface*,hidden_surfaces);
+cws_array(cwsGuiSurface*) visible_surfaces;
+cws_array(cwsGuiSurface*) hidden_surfaces;
 
 GuiButtonSkin button_skin;
 GuiSliderSkin slider_skin;
@@ -31,12 +31,14 @@ void cwsGuiInit()
     button_skin.fill_color_clicked  = cwsPackRgb((ivec3){.x = 102,.y = 102,.z = 102});
     button_skin.outline_color       = cwsPackRgb((ivec3){.x = 85, .y = 85, .z = 85});
     button_skin.outline_size        = 2;
-
+    button_skin.text_scale = (vec2){.x = 0.4f, .y = 0.4f};
+    
     slider_skin.fill_color      = cwsPackRgb((ivec3){.x = 76, .y = 76, .z = 76});
     slider_skin.outline_color   = cwsPackRgb((ivec3){.x = 85, .y = 85, .z = 85});
     slider_skin.marker_color    = cwsPackRgb((ivec3){.x = 127,.y = 127,.z = 127});
     slider_skin.outline_size    = 2;
     slider_skin.mark_scale = (vec2){.x = 0.05f, .y = 1.5f};
+    slider_skin.text_scale = (vec2){.x = 0.4f, .y = 0.4f};
 
     checkbox_skin.fill_color              = cwsPackRgb((ivec3){.x = 76, .y = 76, .z = 76});
     checkbox_skin.outline_color           = cwsPackRgb((ivec3){.x = 85, .y = 85, .z = 85});
@@ -45,15 +47,16 @@ void cwsGuiInit()
     checkbox_skin.outline_size            = 2;
     checkbox_skin.mark_scale              = 0.5f;
     checkbox_skin.mark_offset             = (vec2){.x = 0.01f, .y = 0.25f};
+    checkbox_skin.text_scale = (vec2){.x = 0.4f, .y = 0.4f};
     
     surface_skin.fill_color          = cwsPackRgb((ivec3){.x = 65, .y = 65, .z = 65});
     surface_skin.outline_color       = cwsPackRgb((ivec3){.x = 90, .y = 90, .z = 90});
     surface_skin.outline_size        = 2;
 
-    cwsShaderInit(shader);
+    shader = (cwsShader){0};
     cwsShaderFromfile(&shader, "./data/shaders/gui_v", "./data/shaders/gui_f", NULL);
 
-    cwsMaterialInit(material);
+    material = (cwsMaterial){0};
     material.shader = shader;
     material.rflags = 0;
     ortho = mat4_ortho(0.0f,(f32)cwsScreenSize().x,(f32)cwsScreenSize().y, 0.0f, -1.0f, 1.0f);
@@ -229,7 +232,7 @@ cwsGuiSurface *cwsNewSurface(cwsGuiSurface *parent)
 
     i32 vertex_attribs[3] = {3,2,1};
     s->renderer->mesh = malloc(sizeof(cwsMesh));
-    cwsMeshInit(*s->renderer->mesh);
+    *s->renderer->mesh = (cwsMesh){0};
     cwsEmptyMesh(s->renderer->mesh, vertex_attribs, 3);
     glGenBuffers(1, &s->renderer->tex_buffer);
     glGenTextures(1, &s->renderer->tex);
@@ -258,7 +261,7 @@ cwsGuiButton* cwsSurfaceAddButton(cwsGuiSurface *s)
     btn.pos = (vec2){.x = 0, .y = 0};
     btn.size = (vec2){.x = 100, .y = 20};
     btn.event_flags = 0;
-    btn.text = cwsSurfaceAddText(s, (vec2){.x = 0, .y = 0}, (vec2){.x = 0.6f, .y = 0.6f}, "cwsGuiButton");
+    btn.text = cwsSurfaceAddText(s, (vec2){.x = 0, .y = 0}, button_skin.text_scale, "cwsGuiButton");
     
     cws_bucket_array_push(s->buttons, btn);
     
@@ -277,7 +280,7 @@ cwsGuiSlider *cwsSurfaceAddSlider(cwsGuiSurface *s)
     sl.min = 0;
     sl.max = 100;
     sl.value = 0;
-    sl.text = cwsSurfaceAddText(s, (vec2){.x = 0, .y = 0}, (vec2){.x = 0.4f, .y = 0.4f}, "cwsGuiSlider");
+    sl.text = cwsSurfaceAddText(s, (vec2){.x = 0, .y = 0}, slider_skin.text_scale, "cwsGuiSlider");
     
     cws_bucket_array_push(s->sliders, sl);
     u32 index = 0;
@@ -292,7 +295,7 @@ cwsGuiCheckbox* cwsSurfaceAddCheckbox(cwsGuiSurface *s)
     c.size = (vec2){.x = 100, .y = 20};
     c.event_flags = 0;
     c.checked = 0;
-    c.text = cwsSurfaceAddText(s, (vec2){.x = 0, .y = 0}, (vec2){.x = 0.6f, .y = 0.6f}, "cwsGuiCheckbox");
+    c.text = cwsSurfaceAddText(s, (vec2){.x = 0, .y = 0}, checkbox_skin.text_scale, "cwsGuiCheckbox");
 
     cws_bucket_array_push(s->checkboxes, c);
     u32 index = 0;
@@ -307,7 +310,7 @@ cwsGuiToggleButton* cwsSurfaceAddToggleButton(cwsGuiSurface *s)
     btn.size = (vec2){.x = 100, .y = 20};
     btn.event_flags = 0;
     btn.toggled = 0;
-    btn.text = cwsSurfaceAddText(s, (vec2){.x = 0, .y = 0}, (vec2){.x = 0.6f, .y = 0.6f}, "cwsGuiToggleButton");
+    btn.text = cwsSurfaceAddText(s, (vec2){.x = 0, .y = 0}, button_skin.text_scale, "cwsGuiToggleButton");
     
     cws_bucket_array_push(s->toggle_buttons, btn);
     u32 index = 0;
@@ -681,7 +684,7 @@ void surface_events_clicked(cwsGuiSurface *s, vec2 mouse)
 
         i32 localX = mouse.x - slider->pos.x;
         slider->event_flags |= EVENT_SLIDER_CHANGED;
-        slider->value = ((f32)localX/(f32)slider->size.x) * (slider->max-slider->min) + slider->min;
+        slider->value = floor(((f32)localX/(f32)slider->size.x * (slider->max-slider->min) + slider->min) + 0.5f);
 
         char buf[8];
         sprintf(buf, "%d", slider->value);
@@ -774,7 +777,7 @@ void surface_events_down(cwsGuiSurface *s, vec2 mouse)
 
         i32 localX = mouse.x - slider->pos.x;
         slider->event_flags |= EVENT_SLIDER_CHANGED;
-        slider->value = ((f32)localX/(f32)slider->size.x) * (slider->max-slider->min) + slider->min;
+        slider->value = floor(((f32)localX/(f32)slider->size.x * (slider->max-slider->min) + slider->min) + 0.5f);
         
         char buf[8];
         sprintf(buf, "%d", slider->value);

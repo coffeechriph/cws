@@ -13,6 +13,8 @@
 #include "../util/cws_string.h"
 #include "../io/file.h"
 #include "../math/matrix.h"
+#include "../util/cws_nodetree.h"
+#include "../io/filesystem.h"
 #define FONT_ASCII_CHAR_COUNT 256
 typedef struct aiScene aiScene;
 typedef struct aiMesh aiMesh;
@@ -47,8 +49,8 @@ typedef struct
 {
 	u32 id;
     u32 mvp_id, view_id, model_id, projection_id;
-    cws_array(u32, uniforms);
-    cws_array(cws_string, unames);
+    cws_array(u32) uniforms;
+    cws_array(cws_string) unames;
 } cwsShader;
 
 typedef struct
@@ -70,8 +72,8 @@ typedef struct
 	cwsShader shader;
 	vec3 color;
 
-    cws_array(cwsTexture2D, texture_array);
-    cws_array(u32, texture_uniforms);
+    cws_array(cwsTexture2D) texture_array;
+    cws_array(u32) texture_uniforms;
 	u32 rflags;
 } cwsMaterial;
 
@@ -206,24 +208,6 @@ struct cwsTextContext
 	cwsMesh *mesh;
 };
 
-#define cwsShaderInit(s) s = (cwsShader){.id = 0, .mvp_id = 0, .view_id = 0, .model_id = 0, .projection_id = 0}
-#define cwsMeshInit(m) m = (cwsMesh){.vao = 0, \
-                                                                  .buffers[0] = 0, \
-                                                                  .buffers[1] = 0, \
-                                                                  .minB = (vec3){FLT_MAX,FLT_MAX,FLT_MAX}, \
-                                                                  .maxB = (vec3){FLT_MIN, FLT_MIN, FLT_MIN}, \
-                                                                  ._icount = 0, \
-                                                                  .anim_data = 0}
-#define cwsMaterialInit(m) m = (cwsMaterial){ \
-    cwsShaderInit(.shader), \
-        .color = (vec3){1,1,1}, \
-     .texture_array.data = NULL, \
-    .texture_array.length = 0, \
-     .texture_uniforms.data = NULL, \
-    .texture_uniforms.data = 0, \
-    .rflags = RF_CULL_BACK}
-
-#define cwsTexture2DArrayInit(a) (a = (Texture2DArray){.size = (ivec2){.x=0,.y=0},.images_size = 0, .images_count = 0, .images = NULL }; glGenTextures(1, &a.id))
 extern SDL_Window *main_window;
 extern SDL_GLContext main_gl_context;
 
@@ -245,6 +229,8 @@ void cwsDeleteTexture(cwsTexture2D* tex);
 void cwsTexture2DArrayAppend(cwsTexture2DArray *a, cwsImage2D *i);
 void cwsTexture2DArrayUpdate(cwsTexture2DArray *a);
 void cwsDeleteTexture2DArray(cwsTexture2DArray *a);
+
+bool cwsMaterialFromFile(cwsMaterial *s, const char *file);
 
 bool cwsImageFromfile(cwsImage2D *img, const char *file);
 void cwsDeleteImage(cwsImage2D *i);

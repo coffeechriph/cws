@@ -8,6 +8,7 @@ gcc \
 	./include/util/cws_string.c \
 	./include/util/input.c \
 	./include/io/file.c \
+	./include/io/filesystem.c \
 	./include/math/matrix.c \
 	./include/math/collision.c \
 	./include/gfx/video.c \
@@ -24,5 +25,4 @@ gcc \
 	-Wall \
 	-ldl \
 	-lm
-	#-o ./bin/cws \
 	#

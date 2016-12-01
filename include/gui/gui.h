@@ -43,6 +43,7 @@ typedef struct
     i32 fill_color_clicked;
     i32 outline_color;
     i32 outline_size;
+    vec2 text_scale;
 } GuiButtonSkin;
 
 typedef struct
@@ -52,6 +53,7 @@ typedef struct
     i32 marker_color;
     i32 outline_size;
     vec2 mark_scale;
+    vec2 text_scale;
 } GuiSliderSkin;
 
 typedef struct
@@ -63,6 +65,7 @@ typedef struct
     i32 outline_size;
     f32 mark_scale;
     vec2 mark_offset;
+    vec2 text_scale;
 
 } GuiCheckboxSkin;
 
@@ -115,10 +118,10 @@ struct cwsSurfaceRenderer
     cwsMesh *mesh;
     SurfaceTransform *transform;
     cwsTextContext *text_context;
-    cws_array(cwsSurfaceRenderer*, children);
+    cws_array(cwsSurfaceRenderer*) children;
 
     //The data contains (pos,size,color_index) of every added item
-    cws_array(f32, item_data);
+    cws_array(f32) item_data;
 
     bool fill;
 };
@@ -129,12 +132,12 @@ struct cwsGuiSurface
     cwsSurfaceRenderer *renderer;
     SurfaceTransform *transform;
     
-    cws_bucket_array(cwsGuiButton, buttons);
-    cws_bucket_array(cwsGuiSlider, sliders);
-    cws_bucket_array(cwsGuiCheckbox, checkboxes);
-    cws_bucket_array(cwsGuiToggleButton, toggle_buttons);
-    cws_array(cwsGuiSurface*, children);
-    cws_array(cwsText*, texts);
+    cws_bucket_array(cwsGuiButton, 32) buttons;
+    cws_bucket_array(cwsGuiSlider, 32) sliders;
+    cws_bucket_array(cwsGuiCheckbox, 32) checkboxes;
+    cws_bucket_array(cwsGuiToggleButton, 32) toggle_buttons;
+    cws_array(cwsGuiSurface*) children;
+    cws_array(cwsText*) texts;
 };
 
 extern GuiButtonSkin button_skin;
