@@ -71,6 +71,12 @@ typedef struct
 
 typedef struct
 {
+    i32 outline_color;
+    i32 outline_size;
+} GuiViewPanelSkin;
+
+typedef struct
+{
     vec2 pos;
     vec2 size;
     i32 event_flags;
@@ -106,38 +112,41 @@ typedef struct
 
 typedef struct
 {
-    vec3 pos;
+    vec2 pos;
     vec2 size;
-} SurfaceTransform;
-
-typedef struct cwsSurfaceRenderer cwsSurfaceRenderer;
-struct cwsSurfaceRenderer
-{
-    u32 tex_buffer, tex;
-
+    i32 bg_color;
+    i32 event_flags;
+    u32 fbo_id;
+    u32 fbo_texid;
+    u32 fbo_depthrb;
+    mat4 view_matrix;
+    mat4 projection_matrix;
     cwsMesh *mesh;
-    SurfaceTransform *transform;
-    cwsTextContext *text_context;
-    cws_array(cwsSurfaceRenderer*) children;
+    cwsMaterial *material;
 
-    //The data contains (pos,size,color_index) of every added item
-    cws_array(f32) item_data;
-
-    bool fill;
-};
+} cwsGuiViewPanel;
 
 typedef struct cwsGuiSurface cwsGuiSurface;
 struct cwsGuiSurface
 {
-    cwsSurfaceRenderer *renderer;
-    SurfaceTransform *transform;
+    u32 tex_buffer, tex;
+    vec3 pos;
+    vec2 size;
+    bool fill;
+    
+    //The data contains (pos,size,color_index) of every added item
+    cws_array(f32) item_data;
     
     cws_bucket_array(cwsGuiButton, 32) buttons;
     cws_bucket_array(cwsGuiSlider, 32) sliders;
     cws_bucket_array(cwsGuiCheckbox, 32) checkboxes;
     cws_bucket_array(cwsGuiToggleButton, 32) toggle_buttons;
+    cws_bucket_array(cwsGuiViewPanel, 32) view_panels;
     cws_array(cwsGuiSurface*) children;
     cws_array(cwsText*) texts;
+    
+    cwsMesh *mesh;
+    cwsTextContext *text_context;
 };
 
 extern GuiButtonSkin button_skin;
@@ -159,4 +168,5 @@ cwsGuiButton*              cwsSurfaceAddButton(cwsGuiSurface *s);
 cwsGuiSlider*              cwsSurfaceAddSlider(cwsGuiSurface *s);
 cwsGuiCheckbox*            cwsSurfaceAddCheckbox(cwsGuiSurface *s);
 cwsGuiToggleButton*        cwsSurfaceAddToggleButton(cwsGuiSurface *s);
+cwsGuiViewPanel* cwsSurfaceAddViewPanel(cwsGuiSurface *s);
 cwsText* 	                cwsSurfaceAddText(cwsGuiSurface *s, vec2 pos, vec2 scale, const char *str);

@@ -28,20 +28,6 @@ void cwsVideoDestroy()
     cwsDeleteShader(&text_shader);
 }
 
-//Allocates a new string and copies the data from src into the new returned buffer
-//This returned buffer must be deleted!
-char* copy_conststr(const char *src, i32 src_length)
-{
-	char *copy = (char*)malloc(sizeof(char) * src_length+1);
-	for(i32 i = 0; i < src_length; ++i)
-	{
-		copy[i] = src[i];
-	}
-
-	copy[src_length] = '\0';
-	return copy;
-}
-
 //Copies the node tree from Assimp to the internal format
 void copy_node_tree(cwsNode *node, aiNode *anode)
 {
@@ -675,7 +661,7 @@ void cwsFillMesh(cwsMesh *mesh, f32 *vertex_data, i32 vcount, i32 *index_data, i
 	glBindVertexArray(0);
 }
 
-void video_fill_submesh(cwsMesh *mesh, f32 *vertex_data, i32 voffset, i32 vlength, i32 *index_data, i32 ioffset, i32 ilength)
+void cwsFillSubMesh(cwsMesh *mesh, f32 *vertex_data, i32 voffset, i32 vlength, i32 *index_data, i32 ioffset, i32 ilength)
 {
 	if(mesh == NULL)
 	{
@@ -687,6 +673,225 @@ void video_fill_submesh(cwsMesh *mesh, f32 *vertex_data, i32 voffset, i32 vlengt
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->buffers[1]);
 	glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32)*ioffset, sizeof(i32)*ilength, index_data);
+}
+
+/*
+	This function should be called from mesh_animate only!
+*/
+void mesh_traverse_animtree(cwsMesh *mesh, cwsNode *node, mat4 parent_transform)
+{
+	//mat4 node_transform = node->transform;
+	mat4 node_transform = mat4_default;
+	cwsAnimNode *n = node->current_anim_node;
+	if(n)
+	{
+		f32 a_time = mesh->anim_data->animation_time;
+
+		//INTERPOLATE ROTATION
+		i32 index = 0;
+		for(i32 i = 0; i < n->rotations_count-1; ++i)
+		{
+			if(a_time < n->rtime[i+1])
+			{
+				index = i;
+				break;
+			}
+		}
+
+		i32 next_index = index+1;
+
+		f32 delta_time = n->rtime[next_index] - n->rtime[index];
+		f32 factor = (f32)fabs((a_time - n->rtime[index])) / delta_time;
+		quat start = n->rotations[index];
+		quat end = n->rotations[next_index];
+
+		quat q = quat_slerp(start, end, factor);
+		q = quat_normalize(q);
+
+		//INTERPOLATE TRANSLATION
+		index = 0;
+		for(i32 i = 0; i < n->positions_count-1; ++i)
+		{
+			if(a_time < n->ptime[i+1])
+			{
+				index = i;
+				break;
+			}
+		}
+		
+		next_index = index+1;
+
+		delta_time = n->ptime[next_index] - n->ptime[index];
+		factor = (f32)fabs((a_time - n->ptime[index])) / delta_time;
+		vec3 start_p = n->positions[index];
+		vec3 end_p = n->positions[next_index];
+
+		start_p = vec3_mul_scalar(start_p, factor);
+		end_p = vec3_mul_scalar(end_p, 1 - factor);
+		vec3 v = vec3_add(start_p, end_p);
+		mat4 tr = mat4_translate(mat4_default, v);
+
+		//INTERPOLATE SCALING
+		index = 0;
+		for(i32 i = 0; i < n->scalings_count-1; ++i)
+		{
+			if(a_time < n->stime[i+1])
+			{
+				index = i;
+				break;
+			}
+		}
+
+		next_index = index+1;
+
+		delta_time = n->stime[next_index] - n->stime[index];
+		factor = (f32)fabs((a_time - n->stime[index])) / delta_time;
+
+		start_p = n->scalings[index];
+		end_p = n->scalings[next_index];
+		
+		start_p = vec3_mul_scalar(start_p, factor);
+		end_p = vec3_mul_scalar(end_p, 1 - factor);
+		v = vec3_add(start_p, end_p);
+
+		mat4 qmat = quat_to_mat4(q);
+		mat4 ts = mat4_scale(mat4_default, v);
+		node_transform = mat4_mul(tr,qmat);
+		node_transform = mat4_mul(node_transform,ts);
+	}
+
+	parent_transform = mat4_mul(parent_transform,node_transform);
+
+	if(node->anim_bone != NULL)
+	{
+		node->anim_bone->transform = mat4_mul(parent_transform,node->anim_bone->offset_matrix);
+		node->anim_bone->transform = mat4_mul(mesh->anim_data->inverse_transform,node->anim_bone->transform);
+	}
+
+	for(i32 i = 0; i < node->children_count; ++i)
+	{
+		mesh_traverse_animtree(mesh, &node->children[i], parent_transform);	
+	}
+}
+
+void mesh_animate(cwsMesh *mesh, f32 time_in_secs)
+{
+	if(mesh->anim_data == NULL || mesh->anim_data->animations[0]->selected_clip == NULL)
+		return;
+
+	f32 ticks_per_second = mesh->anim_data->animations[0]->ticks_per_second != 0 ? mesh->anim_data->animations[0]->ticks_per_second : 25.0f;
+	f32 time_in_ticks = time_in_secs * ticks_per_second;
+
+	f32 fpm = mesh->anim_data->animations[0]->frame_factor;
+	f32 start = fpm * mesh->anim_data->animations[0]->selected_clip->start_frame;
+	f32 end = fpm * mesh->anim_data->animations[0]->selected_clip->end_frame;
+	mesh->anim_data->animation_time = fmod(time_in_ticks, end-start)+start;
+
+	mat4 id = mat4_default;
+	mesh_traverse_animtree(mesh, &mesh->anim_data->root_node, id);
+}
+
+void cwsBindMesh(cwsMesh *mesh)
+{
+	glBindVertexArray(mesh->vao);
+}
+
+void cwsDrawMesh(mat4 transform, cwsMesh *mesh, i32 p)
+{
+	if(mesh == NULL || active_material == NULL)
+	{
+		return;
+	}
+
+	mat4 mvp = mat4_mul(main_projection_matrix, main_view_matrix);
+	mvp 	 = mat4_mul(mvp, transform);
+
+	glUniformMatrix4fv(active_material->shader.model_id, 1, GL_FALSE, transform.m);
+	glUniformMatrix4fv(active_material->shader.mvp_id, 1, GL_FALSE, mvp.m);
+	glUniformMatrix4fv(active_material->shader.view_id, 1, GL_FALSE, main_view_matrix.m);
+	glUniformMatrix4fv(active_material->shader.projection_id, 1, GL_FALSE, main_projection_matrix.m);
+	glDrawElements(p, mesh->_icount, GL_UNSIGNED_INT, NULL);
+}
+
+//Buffers the bone matrix data and continues down the tree
+void continue_bone_search(cwsNode *r, i32 *j);
+void buffer_bone_uniforms(cwsNode *r, i32 *j)
+{
+	if(r->anim_bone->gpu_name == NULL)
+	{
+		r->anim_bone->gpu_name = malloc(sizeof(char)*32);
+		sprintf(r->anim_bone->gpu_name, "EE_bone_matrices[%d]", *j);
+	}
+
+	(*j)++;
+	glUniformMatrix4fv(glGetUniformLocation(active_material->shader.id, r->anim_bone->gpu_name), 1, GL_FALSE, r->anim_bone->transform.m);
+
+	for(i32 i = 0; i < r->children_count; ++i)
+	{
+		if(r->children[i].anim_bone != NULL)
+		{
+			buffer_bone_uniforms(&r->children[i], j);
+		}
+		else
+		{
+			continue_bone_search(&r->children[i], j);
+		}
+	}
+}
+
+//Just continues the search until a animation bone is found in the node structure
+void continue_bone_search(cwsNode *r, i32 *j)
+{
+	for(i32 i = 0; i < r->children_count; ++i)
+	{
+		if(r->children[i].anim_bone != NULL)
+		{
+			buffer_bone_uniforms(&r->children[i],j);
+		}
+		else
+		{
+			continue_bone_search(&r->children[i],j);
+		}
+	}
+}
+
+void cwsDrawAnimatedMesh(mat4 transform, cwsMesh *mesh, i32 p, f32 time_in_secs)
+{
+	if(mesh == NULL || active_material == NULL)
+	{
+		return;
+	}
+
+	/*
+		Do mesh animation
+	*/
+	if(mesh->anim_data->animations[0] != NULL)
+	{
+		mesh_animate(mesh, time_in_secs);
+		i32 j = 0;
+
+		//Recursivly search through the node tree and send the bone matrices to the shader
+		for(i32 i = 0; i < mesh->anim_data->root_node.children_count; ++i)
+		{
+			if(mesh->anim_data->root_node.children[i].anim_bone != NULL)
+			{
+				buffer_bone_uniforms(&mesh->anim_data->root_node.children[i],&j);
+			}
+			else
+			{
+				continue_bone_search(&mesh->anim_data->root_node.children[i],&j);
+			}
+		}
+	}
+
+	mat4 mvp = mat4_mul(main_projection_matrix, main_view_matrix);
+	mvp 	 = mat4_mul(mvp, transform);
+
+	glUniformMatrix4fv(active_material->shader.mvp_id, 1, GL_FALSE, mvp.m);
+	glUniformMatrix4fv(active_material->shader.view_id, 1, GL_FALSE, main_view_matrix.m);
+	glUniformMatrix4fv(active_material->shader.model_id, 1, GL_FALSE, transform.m);
+	glUniformMatrix4fv(active_material->shader.projection_id, 1, GL_FALSE, main_projection_matrix.m);
+	glDrawElements(p, mesh->_icount, GL_UNSIGNED_INT, NULL);
 }
 
 bool cwsTextureFromfile(cwsTexture2D *tex, const char *file, i32 filter)
@@ -705,6 +910,12 @@ bool cwsTextureFromfile(cwsTexture2D *tex, const char *file, i32 filter)
 
 bool cwsTextureFromsrc(cwsTexture2D *tex, SDL_Surface *img, i32 filter)
 {
+    if(filter < 0 || filter > 4)
+    {
+        cws_log("Texture filter out of bounds!");
+        return false;
+    }
+    
 	//Color mode
 	u32 mode = GL_RGB;
 	u32 internal = GL_RGB;
@@ -941,11 +1152,96 @@ bool cwsShaderFromsrc(cwsShader* shader, const char *vertex_src, const char *fra
     return true;
 }
 
+bool cwsShaderFromfile(cwsShader *shader, const char *vertex_file, const char *frag_file, const char *geom_file)
+{
+	shader->id = glCreateProgram();
+
+	i32 vlength = 0, flength = 0, glength = 0;
+	char *vertex = cwsReadFile(vertex_file, &vlength);
+	char *fragment = cwsReadFile(frag_file, &flength);
+    char *geom = (geom_file != NULL) ? cwsReadFile(geom_file, &glength) : NULL;
+
+	if(vertex != NULL && fragment != NULL)
+	{
+        i32 vid = glCreateShader(GL_VERTEX_SHADER);
+		i32 fid = glCreateShader(GL_FRAGMENT_SHADER);
+        
+		glShaderSource(vid, 1, (const char**)&vertex, &vlength);
+        glShaderSource(fid, 1, (const char**)&fragment, &flength);
+        
+        i32 gid = 0;
+        if(geom != NULL)
+        {
+            gid = glCreateShader(GL_GEOMETRY_SHADER);
+            glShaderSource(gid, 1, (const char **)&geom, &glength);
+            glCompileShader(gid);
+
+            char infoLog[1024];
+            i32 infoLength = 0;
+            glGetShaderInfoLog(gid, 1024, &infoLength, infoLog);
+            if(infoLength > 0)
+            {
+                cws_log("%s geometry shader error:\n%s\n", geom_file, infoLog);
+                return false;
+            }
+            infoLength = 0;
+        }
+
+		glCompileShader(vid);
+
+		char infoLog[1024];
+		i32 infoLength = 0;
+		glGetShaderInfoLog(vid, 1024, &infoLength, infoLog);
+		if(infoLength > 0)
+		{
+			cws_log("%s vertex shader error:\n%s\n", vertex_file, infoLog);
+			return false;
+		}
+		infoLength = 0;
+	
+		glCompileShader(fid);
+		glGetShaderInfoLog(fid, 1024, &infoLength, infoLog);
+		if(infoLength > 0)
+		{
+			cws_log("%s fragment shader error:\n%s\n", frag_file, infoLog);
+			return false;
+		}		
+		infoLength = 0;
+
+		glAttachShader(shader->id, vid);
+		glAttachShader(shader->id, fid);
+        if(glIsShader(gid)) glAttachShader(shader->id, gid);
+		glLinkProgram(shader->id);
+
+		glGetProgramInfoLog(shader->id, 1024, &infoLength, infoLog);
+		if(infoLength > 0)
+		{
+			cws_log("[%s] [%s] shader program error:\n%s\n", vertex_file, frag_file, infoLog);
+			return false;
+		}
+
+		glDetachShader(shader->id, vid);
+		glDetachShader(shader->id, fid);
+		glDeleteShader(vid);
+		glDeleteShader(fid);
+    }
+
+	free(vertex);
+	free(fragment);
+
+	shader->mvp_id = glGetUniformLocation(shader->id, "mvp_matrix");
+	shader->model_id = glGetUniformLocation(shader->id, "model_matrix");
+	shader->view_id = glGetUniformLocation(shader->id, "view_matrix");
+	shader->projection_id = glGetUniformLocation(shader->id, "projection_matrix");
+	return true;
+}
+
 void cwsShaderCreateUniform(cwsShader *s, const char *name)
 {
     cws_array_push(s->uniforms, glGetUniformLocation(s->id, name));
-    cws_string st = cws_string();
-    cws_string_build(&st, name);
+    cws_str st;
+    cws_str_init(&st);
+    cws_str_build(&st, name);
     cws_array_push(s->unames, st);
 }
 
@@ -987,6 +1283,18 @@ void cwsShaderBufferUniform(cwsShader *s, const char *name, f32 *values, i32 len
     }
 }
 
+void cwsDeleteShader(cwsShader *shader)
+{
+    glDeleteProgram(shader->id);
+    shader->id = 0;
+    shader->mvp_id = 0;
+    shader->view_id = 0;
+    shader->model_id = 0;
+    shader->projection_id = 0;
+    cws_array_free(shader->unames);
+    cws_array_free(shader->uniforms);
+}
+
 bool is_token(char c)
 {
     if(c == ';'  || c == '{' || c == '}'  || c == '/' || c == '"')
@@ -1010,8 +1318,8 @@ bool cwsMaterialFromFile(cwsMaterial *m, const char *file)
     
     char read_buffer[128];
     i32 read_offset = 0;
-    cws_array(cws_string) split;
-    cws_array_init(cws_string, split, 0);
+    cws_array(cws_str) split;
+    cws_array_init(cws_str, split, 0);
     for(i32 i = 0; i < length; ++i)
     {
         if(!is_token(src[i]))
@@ -1030,8 +1338,9 @@ bool cwsMaterialFromFile(cwsMaterial *m, const char *file)
             if(read_offset > 0)
             {
             read_buffer[read_offset] = '\0';
-            cws_string str = cws_string();
-            cws_string_build(&str, (const char*)read_buffer);
+            cws_str str;
+            cws_str_init(&str);
+            cws_str_build(&str, (const char*)read_buffer);
             cws_array_push(split, str);
             read_offset = 0;
             }
@@ -1057,8 +1366,9 @@ bool cwsMaterialFromFile(cwsMaterial *m, const char *file)
             {
             read_buffer[read_offset++] = ';';
             read_buffer[read_offset] = '\0';
-            cws_string str = cws_string();
-            cws_string_build(&str, (const char*)read_buffer);
+            cws_str str;
+            cws_str_init(&str);
+            cws_str_build(&str, (const char*)read_buffer);
             cws_array_push(split, str);
             read_offset = 0;
             }
@@ -1066,8 +1376,9 @@ bool cwsMaterialFromFile(cwsMaterial *m, const char *file)
         else if(read_offset > 0)
         {
             read_buffer[read_offset] = '\0';
-            cws_string str = cws_string();
-            cws_string_build(&str, (const char*)read_buffer);
+            cws_str str;
+            cws_str_init(&str);
+            cws_str_build(&str, (const char*)read_buffer);
             cws_array_push(split, str);
             read_offset = 0;
         }
@@ -1465,108 +1776,12 @@ bool cwsMaterialFromFile(cwsMaterial *m, const char *file)
     
     for(i32 i = 0; i < split.length; ++i)
     {
-        cws_string_free(&split.data[i]);
+        cws_str_free(&split.data[i]);
     }
     cws_array_free(split);
     
     return true;
 }    
-
-bool cwsShaderFromfile(cwsShader *shader, const char *vertex_file, const char *frag_file, const char *geom_file)
-{
-	shader->id = glCreateProgram();
-
-	i32 vlength = 0, flength = 0, glength = 0;
-	char *vertex = cwsReadFile(vertex_file, &vlength);
-	char *fragment = cwsReadFile(frag_file, &flength);
-    char *geom = (geom_file != NULL) ? cwsReadFile(geom_file, &glength) : NULL;
-
-	if(vertex != NULL && fragment != NULL)
-	{
-        i32 vid = glCreateShader(GL_VERTEX_SHADER);
-		i32 fid = glCreateShader(GL_FRAGMENT_SHADER);
-        
-		glShaderSource(vid, 1, (const char**)&vertex, &vlength);
-        glShaderSource(fid, 1, (const char**)&fragment, &flength);
-        
-        i32 gid = 0;
-        if(geom != NULL)
-        {
-            gid = glCreateShader(GL_GEOMETRY_SHADER);
-            glShaderSource(gid, 1, (const char **)&geom, &glength);
-            glCompileShader(gid);
-
-            char infoLog[1024];
-            i32 infoLength = 0;
-            glGetShaderInfoLog(gid, 1024, &infoLength, infoLog);
-            if(infoLength > 0)
-            {
-                cws_log("%s geometry shader error:\n%s\n", geom_file, infoLog);
-                return false;
-            }
-            infoLength = 0;
-        }
-
-		glCompileShader(vid);
-
-		char infoLog[1024];
-		i32 infoLength = 0;
-		glGetShaderInfoLog(vid, 1024, &infoLength, infoLog);
-		if(infoLength > 0)
-		{
-			cws_log("%s vertex shader error:\n%s\n", vertex_file, infoLog);
-			return false;
-		}
-		infoLength = 0;
-	
-		glCompileShader(fid);
-		glGetShaderInfoLog(fid, 1024, &infoLength, infoLog);
-		if(infoLength > 0)
-		{
-			cws_log("%s fragment shader error:\n%s\n", frag_file, infoLog);
-			return false;
-		}		
-		infoLength = 0;
-
-		glAttachShader(shader->id, vid);
-		glAttachShader(shader->id, fid);
-        if(glIsShader(gid)) glAttachShader(shader->id, gid);
-		glLinkProgram(shader->id);
-
-		glGetProgramInfoLog(shader->id, 1024, &infoLength, infoLog);
-		if(infoLength > 0)
-		{
-			cws_log("[%s] [%s] shader program error:\n%s\n", vertex_file, frag_file, infoLog);
-			return false;
-		}
-
-		glDetachShader(shader->id, vid);
-		glDetachShader(shader->id, fid);
-		glDeleteShader(vid);
-		glDeleteShader(fid);
-    }
-
-	free(vertex);
-	free(fragment);
-
-	shader->mvp_id = glGetUniformLocation(shader->id, "mvp_matrix");
-	shader->model_id = glGetUniformLocation(shader->id, "model_matrix");
-	shader->view_id = glGetUniformLocation(shader->id, "view_matrix");
-	shader->projection_id = glGetUniformLocation(shader->id, "projection_matrix");
-	return true;
-}
-
-void cwsDeleteShader(cwsShader *shader)
-{
-    glDeleteProgram(shader->id);
-    shader->id = 0;
-    shader->mvp_id = 0;
-    shader->view_id = 0;
-    shader->model_id = 0;
-    shader->projection_id = 0;
-    cws_array_free(shader->unames);
-    cws_array_free(shader->uniforms);
-}
 
 void cwsDeleteMaterial(cwsMaterial *mat)
 {
@@ -1649,225 +1864,6 @@ void cwsBindMaterial(cwsMaterial *mat)
     }
 }
 
-/*
-	This function should be called from mesh_animate only!
-*/
-void mesh_traverse_animtree(cwsMesh *mesh, cwsNode *node, mat4 parent_transform)
-{
-	//mat4 node_transform = node->transform;
-	mat4 node_transform = mat4_default;
-	cwsAnimNode *n = node->current_anim_node;
-	if(n)
-	{
-		f32 a_time = mesh->anim_data->animation_time;
-
-		//INTERPOLATE ROTATION
-		i32 index = 0;
-		for(i32 i = 0; i < n->rotations_count-1; ++i)
-		{
-			if(a_time < n->rtime[i+1])
-			{
-				index = i;
-				break;
-			}
-		}
-
-		i32 next_index = index+1;
-
-		f32 delta_time = n->rtime[next_index] - n->rtime[index];
-		f32 factor = (f32)fabs((a_time - n->rtime[index])) / delta_time;
-		quat start = n->rotations[index];
-		quat end = n->rotations[next_index];
-
-		quat q = quat_slerp(start, end, factor);
-		q = quat_normalize(q);
-
-		//INTERPOLATE TRANSLATION
-		index = 0;
-		for(i32 i = 0; i < n->positions_count-1; ++i)
-		{
-			if(a_time < n->ptime[i+1])
-			{
-				index = i;
-				break;
-			}
-		}
-		
-		next_index = index+1;
-
-		delta_time = n->ptime[next_index] - n->ptime[index];
-		factor = (f32)fabs((a_time - n->ptime[index])) / delta_time;
-		vec3 start_p = n->positions[index];
-		vec3 end_p = n->positions[next_index];
-
-		start_p = vec3_mul_scalar(start_p, factor);
-		end_p = vec3_mul_scalar(end_p, 1 - factor);
-		vec3 v = vec3_add(start_p, end_p);
-		mat4 tr = mat4_translate(mat4_default, v);
-
-		//INTERPOLATE SCALING
-		index = 0;
-		for(i32 i = 0; i < n->scalings_count-1; ++i)
-		{
-			if(a_time < n->stime[i+1])
-			{
-				index = i;
-				break;
-			}
-		}
-
-		next_index = index+1;
-
-		delta_time = n->stime[next_index] - n->stime[index];
-		factor = (f32)fabs((a_time - n->stime[index])) / delta_time;
-
-		start_p = n->scalings[index];
-		end_p = n->scalings[next_index];
-		
-		start_p = vec3_mul_scalar(start_p, factor);
-		end_p = vec3_mul_scalar(end_p, 1 - factor);
-		v = vec3_add(start_p, end_p);
-
-		mat4 qmat = quat_to_mat4(q);
-		mat4 ts = mat4_scale(mat4_default, v);
-		node_transform = mat4_mul(tr,qmat);
-		node_transform = mat4_mul(node_transform,ts);
-	}
-
-	parent_transform = mat4_mul(parent_transform,node_transform);
-
-	if(node->anim_bone != NULL)
-	{
-		node->anim_bone->transform = mat4_mul(parent_transform,node->anim_bone->offset_matrix);
-		node->anim_bone->transform = mat4_mul(mesh->anim_data->inverse_transform,node->anim_bone->transform);
-	}
-
-	for(i32 i = 0; i < node->children_count; ++i)
-	{
-		mesh_traverse_animtree(mesh, &node->children[i], parent_transform);	
-	}
-}
-
-void mesh_animate(cwsMesh *mesh, f32 time_in_secs)
-{
-	if(mesh->anim_data == NULL || mesh->anim_data->animations[0]->selected_clip == NULL)
-		return;
-
-	f32 ticks_per_second = mesh->anim_data->animations[0]->ticks_per_second != 0 ? mesh->anim_data->animations[0]->ticks_per_second : 25.0f;
-	f32 time_in_ticks = time_in_secs * ticks_per_second;
-
-	f32 fpm = mesh->anim_data->animations[0]->frame_factor;
-	f32 start = fpm * mesh->anim_data->animations[0]->selected_clip->start_frame;
-	f32 end = fpm * mesh->anim_data->animations[0]->selected_clip->end_frame;
-	mesh->anim_data->animation_time = fmod(time_in_ticks, end-start)+start;
-
-	mat4 id = mat4_default;
-	mesh_traverse_animtree(mesh, &mesh->anim_data->root_node, id);
-}
-
-void cwsBindMesh(cwsMesh *mesh)
-{
-	glBindVertexArray(mesh->vao);
-}
-
-void cwsDrawMesh(mat4 transform, cwsMesh *mesh, i32 p)
-{
-	if(mesh == NULL || active_material == NULL)
-	{
-		return;
-	}
-
-	mat4 mvp = mat4_mul(main_projection_matrix, main_view_matrix);
-	mvp 	 = mat4_mul(mvp, transform);
-
-	glUniformMatrix4fv(active_material->shader.model_id, 1, GL_FALSE, transform.m);
-	glUniformMatrix4fv(active_material->shader.mvp_id, 1, GL_FALSE, mvp.m);
-	glUniformMatrix4fv(active_material->shader.view_id, 1, GL_FALSE, main_view_matrix.m);
-	glUniformMatrix4fv(active_material->shader.projection_id, 1, GL_FALSE, main_projection_matrix.m);
-	glDrawElements(p, mesh->_icount, GL_UNSIGNED_INT, NULL);
-}
-
-//Buffers the bone matrix data and continues down the tree
-void continue_bone_search(cwsNode *r, i32 *j);
-void buffer_bone_uniforms(cwsNode *r, i32 *j)
-{
-	if(r->anim_bone->gpu_name == NULL)
-	{
-		r->anim_bone->gpu_name = malloc(sizeof(char)*32);
-		sprintf(r->anim_bone->gpu_name, "EE_bone_matrices[%d]", *j);
-	}
-
-	(*j)++;
-	glUniformMatrix4fv(glGetUniformLocation(active_material->shader.id, r->anim_bone->gpu_name), 1, GL_FALSE, r->anim_bone->transform.m);
-
-	for(i32 i = 0; i < r->children_count; ++i)
-	{
-		if(r->children[i].anim_bone != NULL)
-		{
-			buffer_bone_uniforms(&r->children[i], j);
-		}
-		else
-		{
-			continue_bone_search(&r->children[i], j);
-		}
-	}
-}
-
-//Just continues the search until a animation bone is found in the node structure
-void continue_bone_search(cwsNode *r, i32 *j)
-{
-	for(i32 i = 0; i < r->children_count; ++i)
-	{
-		if(r->children[i].anim_bone != NULL)
-		{
-			buffer_bone_uniforms(&r->children[i],j);
-		}
-		else
-		{
-			continue_bone_search(&r->children[i],j);
-		}
-	}
-}
-
-void cwsDrawAnimatedMesh(mat4 transform, cwsMesh *mesh, i32 p, f32 time_in_secs)
-{
-	if(mesh == NULL || active_material == NULL)
-	{
-		return;
-	}
-
-	/*
-		Do mesh animation
-	*/
-	if(mesh->anim_data->animations[0] != NULL)
-	{
-		mesh_animate(mesh, time_in_secs);
-		i32 j = 0;
-
-		//Recursivly search through the node tree and send the bone matrices to the shader
-		for(i32 i = 0; i < mesh->anim_data->root_node.children_count; ++i)
-		{
-			if(mesh->anim_data->root_node.children[i].anim_bone != NULL)
-			{
-				buffer_bone_uniforms(&mesh->anim_data->root_node.children[i],&j);
-			}
-			else
-			{
-				continue_bone_search(&mesh->anim_data->root_node.children[i],&j);
-			}
-		}
-	}
-
-	mat4 mvp = mat4_mul(main_projection_matrix, main_view_matrix);
-	mvp 	 = mat4_mul(mvp, transform);
-
-	glUniformMatrix4fv(active_material->shader.mvp_id, 1, GL_FALSE, mvp.m);
-	glUniformMatrix4fv(active_material->shader.view_id, 1, GL_FALSE, main_view_matrix.m);
-	glUniformMatrix4fv(active_material->shader.model_id, 1, GL_FALSE, transform.m);
-	glUniformMatrix4fv(active_material->shader.projection_id, 1, GL_FALSE, main_projection_matrix.m);
-	glDrawElements(p, mesh->_icount, GL_UNSIGNED_INT, NULL);
-}
-
 bool cwsCreateTextContext(cwsTextContext *context, const char *filename)
 {
 	i32 length = 0;
@@ -1877,7 +1873,7 @@ bool cwsCreateTextContext(cwsTextContext *context, const char *filename)
 	i32 offset = 0;
 
 	//Split the file into easy to read words
-	cws_string* words = malloc(sizeof(cws_string)*32);
+	cws_str* words = malloc(sizeof(cws_str)*32);
 	if(words == NULL)
 	{
 		cws_log("Error allocating memory for words!");
@@ -1894,7 +1890,7 @@ bool cwsCreateTextContext(cwsTextContext *context, const char *filename)
 				read[offset++] = '\0';
 				if(words_count >= words_size)
 				{
-					cws_string *nw = realloc(words, sizeof(cws_string)*(words_size+32));
+					cws_str *nw = realloc(words, sizeof(cws_str)*(words_size+32));
 					if(nw == NULL)
 					{
 						cws_log("Error allocating memory for words!");
@@ -1905,8 +1901,8 @@ bool cwsCreateTextContext(cwsTextContext *context, const char *filename)
 					words_size += 32;
 				}
 
-				words[words_count] = cws_string();
-				cws_string_build(&words[words_count++], (const char *)read);
+                cws_str_init(&words[words_count]);
+				cws_str_build(&words[words_count++], (const char *)read);
 				offset = 0;
 			}
 		}
@@ -1922,7 +1918,8 @@ bool cwsCreateTextContext(cwsTextContext *context, const char *filename)
 	context->texts = NULL;
 	context->texts_size = 0;
 	context->texts_count = 0;
-	cws_string tfile = cws_string();
+    cws_str tfile;
+    cws_str_init(&tfile);
 	for(u32 i = 0; i < FONT_ASCII_CHAR_COUNT; ++i)
 	{
 		context->chars[i] = (cwsFontChar){ .x = 0, .y = 0, .w = 0, .h = 0, .offset_x = 0, .offset_y = 0, .advance_x = 0};
@@ -1932,7 +1929,7 @@ bool cwsCreateTextContext(cwsTextContext *context, const char *filename)
 	{
 		if(strcmp(words[i].data,"file") == 0)
 		{
-			cws_string_copy(&tfile,&words[i+1]);
+			cws_str_copy(&tfile,&words[i+1]);
 		}
 		else if(strcmp(words[i].data,"chars") == 0 && strcmp(words[i+1].data,"count") == 0)
 		{
@@ -1988,14 +1985,14 @@ bool cwsCreateTextContext(cwsTextContext *context, const char *filename)
 
 	for(u32 i = 0; i < words_count; ++i)
 	{
-		cws_string_free(&words[i]);
+		cws_str_free(&words[i]);
 	}
 
 	free(words);
 
     context->texture = malloc(sizeof(cwsTexture2D));
     cwsTextureFromfile(context->texture, (const char *)tfile.data, IF_LINEAR);
-	cws_string_free(&tfile);
+	cws_str_free(&tfile);
 	glGenBuffers(1, &context->tex_buffer);
 	glGenTextures(1, &context->buffer_texture_id);
 
@@ -2009,7 +2006,7 @@ void cwsDeleteTextContext(cwsTextContext *context)
 {
 	for(u32 j = 0; j < context->texts_count; ++j)
 	{
-		cws_string_free(&context->texts[j]->str);
+		cws_str_free(&context->texts[j]->str);
 		free(context->texts[j]);
 	}	
 
@@ -2148,8 +2145,8 @@ cwsText* cwsNewText(cwsTextContext *context, vec2 pos, vec2 scale, const char *t
 	txt->bounds = (vec4){.x = 0, .y = 0, .z = 40, .w = 40};
 	txt->pos = pos;
 	txt->scale = scale;
-	txt->str = cws_string();
-	cws_string_build(&txt->str, tx);
+    cws_str_init(&txt->str);
+	cws_str_build(&txt->str, tx);
 	txt->context = context;
 	context->texts[context->texts_count++] = txt;
 	video_buffer_text_context(context);
@@ -2159,7 +2156,7 @@ cwsText* cwsNewText(cwsTextContext *context, vec2 pos, vec2 scale, const char *t
 
 void cwsRebuildText(cwsTextContext *context, cwsText *text, const char *tx)
 {
-	cws_string_build(&text->str, tx);
+	cws_str_build(&text->str, tx);
 	video_buffer_text_context(context);
 }
 

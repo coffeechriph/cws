@@ -31,6 +31,226 @@ void render();
 void render_depth();
 void render_depth_ortho(vec3 min, vec3 max);
 
+void cwsSceneInit()
+{
+    active_camera_proj = mat4_default;
+    active_camera_view = mat4_default;
+    
+    memset(&uniform_light_data, 0, sizeof(cwsUniformLightData));
+    default_camera.far_distance = 1000.0f;
+    default_camera.near_distance = 1.0f;
+    default_camera.fov = 60.0f;
+    default_camera.fog_begin = 600.0f;
+    default_camera.fog_end = 1000.0f;
+    default_camera.position = (vec3){.x = 0, .y = 0, .z = 0};
+    default_camera.dir = (vec3){.x = 0, .y = 0, .z = -1};
+    default_camera.rot = (vec3){.x = 0, .y = 0, .z = 0};
+    cwsSetActiveCamera(&default_camera);
+    
+    cws_array_init(cwsDrawGroup, draw_groups, 0);
+    cws_array_init(cwsCamera*, cameras,0);
+    cws_array_init(cwsDirLight*, dirlights, 0);
+    cws_array_init(cwsPointLight*, pointlights, 0);
+    cws_array_init(cwsSpotLight*, spotlights, 0);
+    
+    shadow_shader = (cwsShader){0};
+    cwsShaderFromsrc(&shadow_shader,
+                     "#version 330\n"
+                     "layout(location = 0) in vec3 pos;\n"
+                     "layout (location = 1) in vec3 normal;\n"
+                     "layout (location = 2) in vec2 uv;\n"
+                     "layout (location = 3) in vec3 color;\n"
+                     
+                     "uniform mat4 mvp_matrix;\n"
+                     "void main()\n"
+                     "{\n"
+                     "gl_Position = (mvp_matrix) * vec4(pos,1.0f);\n"
+                     "}\n"
+                     , 
+                     "#version 330\n"
+                     "out vec4 out_color;\n"
+                     "void main()\n"
+                     "{\n"
+                     "out_color = vec4(1.0);\n"
+                     "}\n",
+                     NULL);
+    shadow_material = (cwsMaterial){0};
+    shadow_material.shader = shadow_shader;
+    shadow_material.rflags = RF_CULL_FRONT;
+    
+    shadow_shader_animated = (cwsShader){0};
+    cwsShaderFromsrc(&shadow_shader_animated, 
+                     "#version 330\n"
+                     "layout(location = 0) in vec3 pos;\n"
+                     "layout (location = 1) in vec3 normal;\n"
+                     "layout (location = 2) in vec2 uv;\n"
+                     "layout (location = 3) in vec3 color;\n"
+                     "layout (location = 4) in vec4 bone_indices;\n"
+                     "layout (location = 5) in vec4 bone_weights;\n"
+                     
+                     "uniform mat4 EE_bone_matrices[32];\n"
+                     
+                     "uniform mat4 mvp_matrix;\n"
+                     "void main()\n"
+                     "{\n"
+                     "mat4 bone_transform = mat4(0.0f);\n"
+                     "if(bone_indices[0] >= 0)\n"
+                     "	bone_transform += EE_bone_matrices[int(bone_indices[0])] * bone_weights[0];\n"
+                     
+                     "if(bone_indices[1] >= 0)\n"
+                     "	bone_transform += EE_bone_matrices[int(bone_indices[1])] * bone_weights[1];\n"
+                     
+                     "if(bone_indices[2] >= 0)\n"
+                     "	bone_transform += EE_bone_matrices[int(bone_indices[2])] * bone_weights[2];\n"
+                     
+                     "if(bone_indices[3] >= 0)\n"
+                     "	bone_transform += EE_bone_matrices[int(bone_indices[3])] * bone_weights[3];\n"
+                     "vec4 posL = bone_transform * vec4(pos,1.0f);\n"
+                     
+                     "gl_Position = (mvp_matrix) * posL;\n"
+                     "}\n"
+                     , 
+                     "#version 330\n"
+                     "out vec4 out_color;\n"
+                     "void main()\n"
+                     "{\n"
+                     "out_color = vec4(1);\n"
+                     "}\n",
+                     NULL);
+    shadow_material_animated = (cwsMaterial){0};
+    shadow_material_animated.shader = shadow_shader_animated;
+    shadow_material_animated.rflags = RF_CULL_FRONT;
+    
+    shadow_shader_cubemap = (cwsShader){0};
+    cwsShaderFromsrc(&shadow_shader_cubemap,
+                     "#version 330\n"
+                     "layout(location = 0) in vec3 pos;\n"
+                     "layout (location = 1) in vec3 normal;\n"
+                     "layout (location = 2) in vec2 uv;\n"
+                     "layout (location = 3) in vec3 color;\n"
+                     
+                     "uniform mat4 mvp_matrix;\n"
+                     "uniform mat4 model_matrix;\n"
+                     "void main()\n"
+                     "{\n"
+                     "gl_Position = (model_matrix) * vec4(pos,1.0f);\n"
+                     "}\n"
+                     , 
+                     "#version 330\n"
+                     "in vec4 FragPos;\n"
+                     "uniform vec3 lightPos;\n"
+                     "uniform float far_plane;\n"
+                     "out vec4 out_color;\n"
+                     "void main()\n"
+                     "{\n"
+                     "float dst = length(FragPos.xyz - lightPos);\n"
+                     "dst = dst / far_plane;\n"
+                     "gl_FragDepth = dst;\n"
+                     "}\n",
+                     "#version 330\n"
+                     "layout(triangles) in;"
+                     "layout(triangle_strip, max_vertices=18) out;"
+                     "uniform mat4 shadowMatrices[6];\n"
+                     "out vec4 FragPos;\n"
+                     "void main(){\n"
+                     "for(int face = 0; face < 6; ++face){\n"
+                     "gl_Layer = face;\n"
+                     "for(int i = 0; i < 3; ++i){\n"
+                     "FragPos = gl_in[i].gl_Position;\n"
+                     "gl_Position = shadowMatrices[face] * FragPos;\n"
+                     "EmitVertex();\n"
+                     "}"
+                     "EndPrimitive();\n"
+                     "}"
+                     "}");
+    shadow_material_cubemap = (cwsMaterial){0};
+    shadow_material_cubemap.rflags = RF_CULL_FRONT;
+    shadow_material_cubemap.shader = shadow_shader_cubemap;
+    
+    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "far_plane");
+    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "shadowMatrices[0]");
+    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "shadowMatrices[1]");
+    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "shadowMatrices[2]");
+    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "shadowMatrices[3]");
+    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "shadowMatrices[4]");
+    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "shadowMatrices[5]");
+    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "lightPos");
+    
+    glGenBuffers(1, &light_ubo_id);
+    glBindBuffer(GL_UNIFORM_BUFFER, light_ubo_id);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(uniform_light_data), &uniform_light_data, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    
+    csm_data.frame_buffer_count = 4;
+    csm_data.frame_buffer_size = 2048;
+    csm_data.shadows_enabled = true;
+    for(u32 i = 0; i < 4; ++i)
+    {
+        csm_data.light_view[i] = mat4_default;
+        csm_data.frame_projections[i] = mat4_default;
+    }
+    glGenFramebuffers(1, &csm_data.frame_buffer);
+    glGenTextures(1, &csm_data.frame_buffer_texture);
+    
+    glBindTexture(GL_TEXTURE_2D, csm_data.frame_buffer_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, csm_data.frame_buffer_size, csm_data.frame_buffer_size, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    GLfloat borderColor[] = { 1.0, 1.0, 1.0, 1.0 };
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);  
+    glBindTexture(GL_TEXTURE_2D, 0);
+    
+    glBindFramebuffer(GL_FRAMEBUFFER, csm_data.frame_buffer);
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, csm_data.frame_buffer_texture, 0);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void cwsSceneDestroy()
+{
+    cwsDeleteShader(&shadow_shader);
+    cwsDeleteShader(&shadow_shader_animated);
+    
+    for(u32 i = 0; i < draw_groups.length; ++i)
+    {
+        cwsDrawGroup *grp = &draw_groups.data[i];
+        cws_bucket_array_free(grp->renderers);
+        cws_bucket_array_free(grp->hidden_renderers);
+    }
+    
+    cws_array_free(draw_groups);
+    
+    for(u32 i = 0; i < cameras.length; ++i)
+    {
+        free(cameras.data[i]);
+    }
+    cws_array_free(cameras);
+    
+    glDeleteFramebuffers(1, &csm_data.frame_buffer);
+    glDeleteTextures(1, &csm_data.frame_buffer_texture);
+    
+    for(u32 i = 0; i < dirlights.length; ++i)
+    {
+        free(dirlights.data[i]);
+    }
+    cws_array_free(dirlights);
+    
+    for(u32 i = 0; i < pointlights.length; ++i)
+    {
+        free(pointlights.data[i]);
+    }
+    cws_array_free(pointlights);
+    
+    for(u32 i = 0; i < spotlights.length; ++i)
+    {
+        free(spotlights.data[i]);
+    }
+    cws_array_free(spotlights);
+}
+
 cwsCamera *cwsActiveCamera()
 {
     return active_camera;
@@ -528,227 +748,6 @@ void merge_sort_zipair(ZIPair in[], ZIPair *out, i32 list_size)
         return;
     }
 }
-
-void cwsSceneInit()
-{
-    active_camera_proj = mat4_default;
-    active_camera_view = mat4_default;
-    
-    memset(&uniform_light_data, 0, sizeof(cwsUniformLightData));
-    default_camera.far_distance = 1000.0f;
-    default_camera.near_distance = 1.0f;
-    default_camera.fov = 60.0f;
-    default_camera.fog_begin = 600.0f;
-    default_camera.fog_end = 1000.0f;
-    default_camera.position = (vec3){.x = 0, .y = 0, .z = 0};
-    default_camera.dir = (vec3){.x = 0, .y = 0, .z = -1};
-    default_camera.rot = (vec3){.x = 0, .y = 0, .z = 0};
-    cwsSetActiveCamera(&default_camera);
-    
-    cws_array_init(cwsDrawGroup, draw_groups, 0);
-    cws_array_init(cwsCamera*, cameras,0);
-    cws_array_init(cwsDirLight*, dirlights, 0);
-    cws_array_init(cwsPointLight*, pointlights, 0);
-    cws_array_init(cwsSpotLight*, spotlights, 0);
-    
-    shadow_shader = (cwsShader){0};
-    cwsShaderFromsrc(&shadow_shader,
-                     "#version 330\n"
-                     "layout(location = 0) in vec3 pos;\n"
-                     "layout (location = 1) in vec3 normal;\n"
-                     "layout (location = 2) in vec2 uv;\n"
-                     "layout (location = 3) in vec3 color;\n"
-                     
-                     "uniform mat4 mvp_matrix;\n"
-                     "void main()\n"
-                     "{\n"
-                     "gl_Position = (mvp_matrix) * vec4(pos,1.0f);\n"
-                     "}\n"
-                     , 
-                     "#version 330\n"
-                     "out vec4 out_color;\n"
-                     "void main()\n"
-                     "{\n"
-                     "out_color = vec4(1.0);\n"
-                     "}\n",
-                     NULL);
-    shadow_material = (cwsMaterial){0};
-	shadow_material.shader = shadow_shader;
-    shadow_material.rflags = RF_CULL_FRONT;
-    
-    shadow_shader_animated = (cwsShader){0};
-	cwsShaderFromsrc(&shadow_shader_animated, 
-                     "#version 330\n"
-                     "layout(location = 0) in vec3 pos;\n"
-                     "layout (location = 1) in vec3 normal;\n"
-                     "layout (location = 2) in vec2 uv;\n"
-                     "layout (location = 3) in vec3 color;\n"
-                     "layout (location = 4) in vec4 bone_indices;\n"
-                     "layout (location = 5) in vec4 bone_weights;\n"
-                     
-                     "uniform mat4 EE_bone_matrices[32];\n"
-                     
-                     "uniform mat4 mvp_matrix;\n"
-                     "void main()\n"
-                     "{\n"
-                     "mat4 bone_transform = mat4(0.0f);\n"
-                     "if(bone_indices[0] >= 0)\n"
-                     "	bone_transform += EE_bone_matrices[int(bone_indices[0])] * bone_weights[0];\n"
-                     
-                     "if(bone_indices[1] >= 0)\n"
-                     "	bone_transform += EE_bone_matrices[int(bone_indices[1])] * bone_weights[1];\n"
-                     
-                     "if(bone_indices[2] >= 0)\n"
-                     "	bone_transform += EE_bone_matrices[int(bone_indices[2])] * bone_weights[2];\n"
-                     
-                     "if(bone_indices[3] >= 0)\n"
-                     "	bone_transform += EE_bone_matrices[int(bone_indices[3])] * bone_weights[3];\n"
-                     "vec4 posL = bone_transform * vec4(pos,1.0f);\n"
-                     
-                     "gl_Position = (mvp_matrix) * posL;\n"
-                     "}\n"
-                     , 
-                     "#version 330\n"
-                     "out vec4 out_color;\n"
-                     "void main()\n"
-                     "{\n"
-                     "out_color = vec4(1);\n"
-                     "}\n",
-                     NULL);
-    shadow_material_animated = (cwsMaterial){0};
-	shadow_material_animated.shader = shadow_shader_animated;
-    shadow_material_animated.rflags = RF_CULL_FRONT;
-    
-    shadow_shader_cubemap = (cwsShader){0};
-    cwsShaderFromsrc(&shadow_shader_cubemap,
-                     "#version 330\n"
-                     "layout(location = 0) in vec3 pos;\n"
-                     "layout (location = 1) in vec3 normal;\n"
-                     "layout (location = 2) in vec2 uv;\n"
-                     "layout (location = 3) in vec3 color;\n"
-                     
-                     "uniform mat4 mvp_matrix;\n"
-                     "uniform mat4 model_matrix;\n"
-                     "void main()\n"
-                     "{\n"
-                     "gl_Position = (model_matrix) * vec4(pos,1.0f);\n"
-                     "}\n"
-                     , 
-                     "#version 330\n"
-                     "in vec4 FragPos;\n"
-                     "uniform vec3 lightPos;\n"
-                     "uniform float far_plane;\n"
-                     "out vec4 out_color;\n"
-                     "void main()\n"
-                     "{\n"
-                     "float dst = length(FragPos.xyz - lightPos);\n"
-                     "dst = dst / far_plane;\n"
-                     "gl_FragDepth = dst;\n"
-                     "}\n",
-                     "#version 330\n"
-                     "layout(triangles) in;"
-                     "layout(triangle_strip, max_vertices=18) out;"
-                     "uniform mat4 shadowMatrices[6];\n"
-                     "out vec4 FragPos;\n"
-                     "void main(){\n"
-                     "for(int face = 0; face < 6; ++face){\n"
-                     "gl_Layer = face;\n"
-                     "for(int i = 0; i < 3; ++i){\n"
-                     "FragPos = gl_in[i].gl_Position;\n"
-                     "gl_Position = shadowMatrices[face] * FragPos;\n"
-                     "EmitVertex();\n"
-                     "}"
-                     "EndPrimitive();\n"
-                     "}"
-                     "}");
-    shadow_material_cubemap = (cwsMaterial){0};
-    shadow_material_cubemap.rflags = RF_CULL_FRONT;
-    shadow_material_cubemap.shader = shadow_shader_cubemap;
-    
-    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "far_plane");
-    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "shadowMatrices[0]");
-    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "shadowMatrices[1]");
-    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "shadowMatrices[2]");
-    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "shadowMatrices[3]");
-    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "shadowMatrices[4]");
-    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "shadowMatrices[5]");
-    cwsShaderCreateUniform(&shadow_material_cubemap.shader, "lightPos");
-    
-	glGenBuffers(1, &light_ubo_id);
-	glBindBuffer(GL_UNIFORM_BUFFER, light_ubo_id);
-	glBufferData(GL_UNIFORM_BUFFER, sizeof(uniform_light_data), &uniform_light_data, GL_DYNAMIC_DRAW);
-	glBindBuffer(GL_UNIFORM_BUFFER, 0);
-
-	csm_data.frame_buffer_count = 4;
-	csm_data.frame_buffer_size = 2048;
-	csm_data.shadows_enabled = true;
-    for(u32 i = 0; i < 4; ++i)
-    {
-        csm_data.light_view[i] = mat4_default;
-        csm_data.frame_projections[i] = mat4_default;
-    }
-	glGenFramebuffers(1, &csm_data.frame_buffer);
-	glGenTextures(1, &csm_data.frame_buffer_texture);
-
-	glBindTexture(GL_TEXTURE_2D, csm_data.frame_buffer_texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, csm_data.frame_buffer_size, csm_data.frame_buffer_size, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-	GLfloat borderColor[] = { 1.0, 1.0, 1.0, 1.0 };
-	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);  
-	glBindTexture(GL_TEXTURE_2D, 0);
-
-	glBindFramebuffer(GL_FRAMEBUFFER, csm_data.frame_buffer);
-	glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, csm_data.frame_buffer_texture, 0);
-	glDrawBuffer(GL_NONE);
-	glReadBuffer(GL_NONE);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-}
-
-void cwsSceneDestroy()
-{
-    cwsDeleteShader(&shadow_shader);
-    cwsDeleteShader(&shadow_shader_animated);
-    
-	for(u32 i = 0; i < draw_groups.length; ++i)
-	{
-        cwsDrawGroup *grp = &draw_groups.data[i];
-		cws_bucket_array_free(grp->renderers);
-		cws_bucket_array_free(grp->hidden_renderers);
-	}
-
-	cws_array_free(draw_groups);
-
-	for(u32 i = 0; i < cameras.length; ++i)
-	{
-		free(cameras.data[i]);
-	}
-	cws_array_free(cameras);
-
-	glDeleteFramebuffers(1, &csm_data.frame_buffer);
-	glDeleteTextures(1, &csm_data.frame_buffer_texture);
-
-	for(u32 i = 0; i < dirlights.length; ++i)
-	{
-		free(dirlights.data[i]);
-	}
-	cws_array_free(dirlights);
-
-	for(u32 i = 0; i < pointlights.length; ++i)
-	{
-		free(pointlights.data[i]);
-	}
-	cws_array_free(pointlights);
-
-	for(u32 i = 0; i < spotlights.length; ++i)
-	{
-		free(spotlights.data[i]);
-	}
-	cws_array_free(spotlights);
-}
-
 
 vec3* split_frustum(mat4 vp_inv)
 {

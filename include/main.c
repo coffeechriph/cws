@@ -15,41 +15,9 @@ int main(int args, char *argv[])
 {
     cws_create(1280, 720, "Game", false);
    
-    cwsMaterial m;
-    cwsMaterialFromFile(&m, "./data/testmat.mat");
-    
-    cwsMaterial mat = (cwsMaterial){0};
-    mat.rflags = RF_NONE;
-    
-    cwsShaderFromfile(&mat.shader, "./data/shaders/single_v", "./data/shaders/single_f", NULL);
-    cwsTexture2D tex;
-    
-    cwsTextureFromfile(&tex, "./data/gfx/tree1.png", IF_NEAREST);
-    cwsMaterialAddTexture(&mat, tex);
-
-    cwsMesh mesh;
-    cwsMeshFromfile(&mesh, "./data/tree1.dae");
-    
-    f32 _x = -10.0f, _z = -5.0f;
-    for(u32 i = 0; i < 100; ++i)
-    {
-        cwsRenderer *renderer = cwsNewRenderer(&mat,&mesh);
-        renderer->position = (vec3){.x = _x, .y = -1.0, .z = _z};
-        renderer->scale = (vec3){.x = 2, .y = 2, .z = 2};
-        cwsUpdateBounds(renderer);
-        
-        _x += 0.5f;
-        if(_x >= 10)
-        {
-            _x = -10.0f;
-            _z -= 0.5f;
-        }
-    }
-    
-    /*
     cwsGuiSurface *surface = cwsNewSurface(NULL);
-    surface->transform->size = (vec2){.x = 400, .y = 400};
-    surface->renderer->fill = true;
+    surface->size = (vec2){.x = 600, .y = 600};
+    surface->fill = true;
     
     cwsGuiButton *btn = cwsSurfaceAddButton(surface);
     btn->size = (vec2){.x = 100, .y = 100};    
@@ -74,8 +42,26 @@ int main(int args, char *argv[])
     tbtn->size = (vec2){.x = 50, .y = 50};
     tbtn->pos = (vec2){.x = 220, .y = 100};
     
+    cwsMesh tree_mesh;
+    cwsMeshFromfile(&tree_mesh, "./data/tree1.dae");
+    
+    cwsTexture2D tree_tex;
+    cwsTextureFromfile(&tree_tex, "./data/gfx/tree1.png", IF_NEAREST);
+    cwsMaterial tree_mat;
+    cws_array_init(u32, tree_mat.texture_uniforms, 0);
+    cws_array_init(cwsTexture2D, tree_mat.texture_array, 0);
+    cwsShaderFromfile(&tree_mat.shader, "./data/shaders/single_v", "./data/shaders/single_f", NULL);
+    cwsMaterialAddTexture(&tree_mat, tree_tex);
+    
+    cwsGuiViewPanel *vpanel = cwsSurfaceAddViewPanel(surface);
+    vpanel->bg_color = cwsPackRgb((ivec3){.x = 220, .y = 200, .z = 100});
+    vpanel->pos = (vec2){220, 200};
+    vpanel->size = (vec2){.x = 300, .y = 300};
+    vpanel->material = &tree_mat;
+    vpanel->mesh = &tree_mesh;
+    vpanel->view_matrix = mat4_translate(mat4_default, (vec3){.x = 0.0f, .y = 0.0f, .z = -4.0f});
     cwsRefreshSurface(surface);
-    cwsShowSurface(surface,false);*/
+    cwsShowSurface(surface,true);
     while(cws_running)
     {
         cwsClear();

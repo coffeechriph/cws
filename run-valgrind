@@ -3,5 +3,5 @@
 cd bin
 LD_LIBRARY_PATH=./
 export LD_LIBRARY_PATH
-valgrind --tool=memcheck --track-origins=yes --leak-check=full ./cws > log.txt 2>&1
+valgrind --tool=memcheck --track-origins=yes --leak-check=full ./cwstest > log.txt 2>&1
 cd ../

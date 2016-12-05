@@ -5,6 +5,7 @@ cws_array(cwsGuiSurface*) hidden_surfaces;
 GuiButtonSkin button_skin;
 GuiSliderSkin slider_skin;
 GuiCheckboxSkin checkbox_skin;
+GuiViewPanelSkin viewpanel_skin;
 SurfaceSkin surface_skin;
 
 cwsMaterial material;
@@ -40,14 +41,17 @@ void cwsGuiInit()
     slider_skin.mark_scale = (vec2){.x = 0.05f, .y = 1.5f};
     slider_skin.text_scale = (vec2){.x = 0.4f, .y = 0.4f};
 
-    checkbox_skin.fill_color              = cwsPackRgb((ivec3){.x = 76, .y = 76, .z = 76});
-    checkbox_skin.outline_color           = cwsPackRgb((ivec3){.x = 85, .y = 85, .z = 85});
-    checkbox_skin.marker_color            = cwsPackRgb((ivec3){.x = 107,.y = 107,.z = 107});
-    checkbox_skin.marker_color_checked    = cwsPackRgb((ivec3){.x = 127,.y = 127,.z = 127});
-    checkbox_skin.outline_size            = 2;
-    checkbox_skin.mark_scale              = 0.5f;
-    checkbox_skin.mark_offset             = (vec2){.x = 0.01f, .y = 0.25f};
+    checkbox_skin.fill_color = cwsPackRgb((ivec3){.x = 76, .y = 76, .z = 76});
+    checkbox_skin.outline_color = cwsPackRgb((ivec3){.x = 85, .y = 85, .z = 85});
+    checkbox_skin.marker_color = cwsPackRgb((ivec3){.x = 107,.y = 107,.z = 107});
+    checkbox_skin.marker_color_checked = cwsPackRgb((ivec3){.x = 127,.y = 127,.z = 127});
+    checkbox_skin.outline_size = 2;
+    checkbox_skin.mark_scale = 0.5f;
+    checkbox_skin.mark_offset = (vec2){.x = 0.01f, .y = 0.25f};
     checkbox_skin.text_scale = (vec2){.x = 0.4f, .y = 0.4f};
+    
+    viewpanel_skin.outline_color = cwsPackRgb((ivec3){.x = 90, .y = 90, .z = 90});
+    viewpanel_skin.outline_size = 5;
     
     surface_skin.fill_color          = cwsPackRgb((ivec3){.x = 65, .y = 65, .z = 65});
     surface_skin.outline_color       = cwsPackRgb((ivec3){.x = 90, .y = 90, .z = 90});
@@ -63,18 +67,15 @@ void cwsGuiInit()
 }
 
 void delete_surface(cwsGuiSurface *s);
-void delete_surface_renderer(cwsSurfaceRenderer* r);
 void cwsGuiDestroy()
 {
     for(u32 i = 0; i < visible_surfaces.length; ++i)
     {
-        delete_surface_renderer(visible_surfaces.data[i]->renderer);
         delete_surface(visible_surfaces.data[i]);
     }
     
     for(u32 i = 0; i < hidden_surfaces.length; ++i)
     {
-        delete_surface_renderer(hidden_surfaces.data[i]->renderer);
         delete_surface(hidden_surfaces.data[i]);
     }
     
@@ -99,31 +100,8 @@ void delete_surface(cwsGuiSurface *s)
     cws_bucket_array_free(s->checkboxes);
     cws_bucket_array_free(s->toggle_buttons);
 
-    if(s->transform != NULL)
-    {
-        free(s->transform);
-    }
-
     cws_array_free(s->texts);
     free(s);
-}
-
-void delete_surface_renderer(cwsSurfaceRenderer *r)
-{
-    for(u32 j = 0; j < r->children.length; ++j)
-    {
-        delete_surface_renderer(r->children.data[j]);
-    }
-    cws_array_free(r->children);
-    cws_array_free(r->item_data);
-    
-    glDeleteBuffers(1, &r->tex_buffer);
-    glDeleteTextures(1, &r->tex);
-    cwsDeleteMesh(r->mesh);
-    free(r->mesh);
-    cwsDeleteTextContext(r->text_context);
-    free(r->text_context);
-    free(r);
 }
 
 void cwsShowSurface(cwsGuiSurface *s, bool c)
@@ -153,7 +131,7 @@ void cwsShowSurface(cwsGuiSurface *s, bool c)
         }
     }
 
-    //Reset component events - if the surface is either shown or hidden the state ncwsds to be reset
+    //Reset component events - if the surface is either shown or hidden the state needs to be reset
     for(u32 i = 0; i < cws_bucket_array_item_count(s->buttons); ++i)
     {
         if(!cws_bucket_array_occupied(s->buttons,i))
@@ -209,37 +187,23 @@ cwsGuiSurface *cwsNewSurface(cwsGuiSurface *parent)
     cws_bucket_array_init(cwsGuiSlider, s->sliders, 0);
     cws_bucket_array_init(cwsGuiCheckbox, s->checkboxes, 0);
     cws_bucket_array_init(cwsGuiToggleButton, s->toggle_buttons, 0);
+    cws_bucket_array_init(cwsGuiViewPanel, s->view_panels, 0);
     cws_array_init(cwsText*, s->texts, 0);
-
-    s->transform = malloc(sizeof(SurfaceTransform));
-    if(s->transform == NULL)
-    {
-        cws_log("Malloc error on SurfaceTransform!");
-        return NULL;
-    }
-    s->transform->pos = (vec3){.x = 0, .y = 0, .z = 0};
-    s->transform->size = (vec2){.x = 300,.y = 300};
-
-    s->renderer = malloc(sizeof(cwsSurfaceRenderer));
-    if(s->renderer == NULL)
-    {
-        cws_log("Malloc error on cwsSurfaceRenderer!");
-        return NULL;
-    }
-    cws_array_init(f32, s->renderer->item_data, 0);
-    cws_array_init(cwsSurfaceRenderer*, s->renderer->children, 0);
-    s->renderer->fill = false;
-
-    i32 vertex_attribs[3] = {3,2,1};
-    s->renderer->mesh = malloc(sizeof(cwsMesh));
-    *s->renderer->mesh = (cwsMesh){0};
-    cwsEmptyMesh(s->renderer->mesh, vertex_attribs, 3);
-    glGenBuffers(1, &s->renderer->tex_buffer);
-    glGenTextures(1, &s->renderer->tex);
-    s->renderer->transform = s->transform;
+    cws_array_init(f32, s->item_data, 0);
     
-    s->renderer->text_context = malloc(sizeof(cwsTextContext));
-    cwsCreateTextContext(s->renderer->text_context, "./test.fnt");
+    s->pos = (vec3){.x = 0, .y = 0, .z = 0};
+    s->size = (vec2){.x = 300,.y = 300};
+    s->fill = false;
+    
+    i32 vertex_attribs[3] = {3,2,1};
+    s->mesh = malloc(sizeof(cwsMesh));
+    *s->mesh = (cwsMesh){0};
+    cwsEmptyMesh(s->mesh, vertex_attribs, 3);
+    glGenBuffers(1, &s->tex_buffer);
+    glGenTextures(1, &s->tex);
+    
+    s->text_context = malloc(sizeof(cwsTextContext));
+    cwsCreateTextContext(s->text_context, "./test.fnt");
 
     if(parent == NULL)
     {
@@ -248,9 +212,6 @@ cwsGuiSurface *cwsNewSurface(cwsGuiSurface *parent)
     else
     {
         cws_array_push(parent->children, s);
-        
-        //Add the new renderer as a child
-        cws_array_push(parent->renderer->children,s->renderer);
     }
     return s;
 }
@@ -315,16 +276,57 @@ cwsGuiToggleButton* cwsSurfaceAddToggleButton(cwsGuiSurface *s)
     cws_bucket_array_push(s->toggle_buttons, btn);
     u32 index = 0;
     cws_bucket_array_last(s->toggle_buttons,index);
-    return &cws_bucket_array_index(s->toggle_buttons,index);;
+    return &cws_bucket_array_index(s->toggle_buttons,index);
+}
+
+cwsGuiViewPanel* cwsSurfaceAddViewPanel(cwsGuiSurface *s)
+{
+    cwsGuiViewPanel view;
+    view.pos = (vec2){.x = 0, .y = 0};
+    view.size = (vec2){.x = 100, .y = 100};
+    view.event_flags = 0;
+    view.bg_color = cwsPackRgb((ivec3){.x = 80, .y = 150, .z = 220});
+    view.projection_matrix = mat4_perspective(100, 100, 60, 1, 100);
+    view.view_matrix = mat4_default;
+    
+    //Setup the FBO of the view panel
+    glGetError();
+    glGenFramebuffers(1, &view.fbo_id);
+    glGenTextures(1, &view.fbo_texid);
+    glGenRenderbuffers(1, &view.fbo_depthrb);
+    
+    glBindTexture(GL_TEXTURE_2D, view.fbo_texid);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 256, 256, 0, GL_RGBA, GL_FLOAT, NULL);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    
+    glBindFramebuffer(GL_FRAMEBUFFER, view.fbo_id);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, view.fbo_texid, 0);
+    
+    //Depth render buffer
+    glBindRenderbuffer(GL_RENDERBUFFER, view.fbo_depthrb);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 256, 256);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, view.fbo_depthrb);
+    
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    view.mesh = NULL;
+    view.material = NULL;
+    cws_bucket_array_push(s->view_panels, view);
+    u32 index = 0;
+    cws_bucket_array_last(s->view_panels, index);
+    return &cws_bucket_array_index(s->view_panels, index);
 }
 
 cwsText* cwsSurfaceAddText(cwsGuiSurface *s, vec2 pos, vec2 scale, const char *str)
 {
-    cwsText *text = cwsNewText(s->renderer->text_context, vec2_add(pos, (vec2){.x = s->transform->pos.x, .y = s->transform->pos.y}), scale, str);
-    text->bounds = (vec4){.x = s->transform->pos.x, 
-                          .y = s->transform->pos.y,
-                          .z = s->transform->pos.x + s->transform->size.x,
-                          .w = s->transform->pos.y + s->transform->size.y};
+    cwsText *text = cwsNewText(s->text_context, vec2_add(pos, (vec2){.x = s->pos.x, .y = s->pos.y}), scale, str);
+    text->bounds = (vec4){.x = s->pos.x, 
+                          .y = s->pos.y,
+                          .z = s->pos.x + s->size.x,
+                          .w = s->pos.y + s->size.y};
     
     cws_array_push(s->texts, text);
     return text;
@@ -333,16 +335,27 @@ cwsText* cwsSurfaceAddText(cwsGuiSurface *s, vec2 pos, vec2 scale, const char *s
 /*
     Removes any mesh data & item data from the surface
 */
-void cwsClearSurface(cwsGuiSurface *s)
+void surface_clear_recursive(cwsGuiSurface *s)
 {
+    for(i32 i = 0; i < s->children.length; ++i)
+    {
+        surface_clear_recursive(s->children.data[i]);
+    }
+    
     cws_bucket_array_free(s->buttons);
     cws_bucket_array_free(s->sliders);
     cws_bucket_array_free(s->checkboxes);
     cws_bucket_array_free(s->toggle_buttons);
+    cws_bucket_array_free(s->view_panels);
+    cws_array_free(s->children);
     cws_array_free(s->texts);
+    cwsClearMesh(s->mesh);
+    cwsClearTextContext(s->text_context);
+}
 
-    cwsClearMesh(s->renderer->mesh);
-    cwsClearTextContext(s->renderer->text_context);
+void cwsClearSurface(cwsGuiSurface *s)
+{
+    surface_clear_recursive(s);
 }
 
 /*
@@ -377,26 +390,45 @@ void fill_rect(f32 *vertices, i32 *indices, i32 *vi, i32 *ii, i32 *i, f32 z)
 void cwsRefreshSurface(cwsGuiSurface *s)
 {
     //Clear old data
-    cws_array_free(s->renderer->item_data);
+    cws_array_free(s->item_data);
 
-    //GuiButtons uses 1 item (16 floats for rendering) while sliders & checkboxes uses 2 items (32)
-    i32 vcount = cws_bucket_array_item_count(s->buttons) * 24 + cws_bucket_array_item_count(s->sliders) * 48 + cws_bucket_array_item_count(s->checkboxes) * 48 + cws_bucket_array_item_count(s->toggle_buttons) * 24;
-    i32 icount = cws_bucket_array_item_count(s->buttons) * 6  + cws_bucket_array_item_count(s->sliders) * 12 + cws_bucket_array_item_count(s->checkboxes) * 12 + cws_bucket_array_item_count(s->toggle_buttons) * 6;
+    //GuiButtons uses 1 item (24 floats for rendering) while sliders & checkboxes uses 2 items (48)
+    i32 vcount = 
+        cws_bucket_array_item_count(s->buttons) * 24 + 
+        cws_bucket_array_item_count(s->sliders) * 48 + 
+        cws_bucket_array_item_count(s->checkboxes) * 48 +
+        cws_bucket_array_item_count(s->toggle_buttons) * 24 +
+        cws_bucket_array_item_count(s->view_panels) * 24;
+    i32 icount = 
+        cws_bucket_array_item_count(s->buttons) * 6  + 
+        cws_bucket_array_item_count(s->sliders) * 12 +
+        cws_bucket_array_item_count(s->checkboxes) * 12 + 
+        cws_bucket_array_item_count(s->toggle_buttons) * 6 +
+        cws_bucket_array_item_count(s->view_panels) * 6;
 
     u32 isize = 0;
-    if(s->renderer->fill)
+    if(s->fill)
     {
         vcount += 24;
         icount += 6;
-        isize = 8 + cws_bucket_array_item_count(s->buttons) * 8 + cws_bucket_array_item_count(s->sliders) * 16 + cws_bucket_array_item_count(s->checkboxes) * 16 + cws_bucket_array_item_count(s->toggle_buttons) * 8;
+        isize = 8 + 
+            cws_bucket_array_item_count(s->buttons) * 8 + 
+            cws_bucket_array_item_count(s->sliders) * 16 + 
+            cws_bucket_array_item_count(s->checkboxes) * 16 + 
+            cws_bucket_array_item_count(s->toggle_buttons) * 8 +
+            cws_bucket_array_item_count(s->view_panels) * 8;
     }
     else
     {
-        isize = cws_bucket_array_item_count(s->buttons) * 8 + cws_bucket_array_item_count(s->sliders) * 16 + cws_bucket_array_item_count(s->checkboxes) * 16 + cws_bucket_array_item_count(s->toggle_buttons) * 8;
+        isize = cws_bucket_array_item_count(s->buttons) * 8 + 
+            cws_bucket_array_item_count(s->sliders) * 16 + 
+            cws_bucket_array_item_count(s->checkboxes) * 16 + 
+            cws_bucket_array_item_count(s->toggle_buttons) * 8 +
+            cws_bucket_array_item_count(s->view_panels) * 8;
     }
 
-    cws_array_init(f32, s->renderer->item_data, isize);
-    s->renderer->item_data.length = s->renderer->item_data.size;
+    cws_array_init(f32, s->item_data, isize);
+    s->item_data.length = s->item_data.size;
 
     f32 vertices[vcount];
     i32 indices [icount];
@@ -453,13 +485,23 @@ void cwsRefreshSurface(cwsGuiSurface *s)
         fill_rect(vertices, indices, &vindex, &iindex, &index, 0.0f);
     }
 
+    for(u32 i = 0; i < cws_bucket_array_item_count(s->view_panels); ++i)
+    {
+        if(!cws_bucket_array_occupied(s->view_panels, i))
+        {
+            continue;
+        }
+        
+        fill_rect(vertices, indices, &vindex, &iindex, &index, 0.0f);
+    }
+    
     //Surface renders with a background
-    if(s->renderer->fill)
+    if(s->fill)
     {
         fill_rect(vertices, indices, &vindex, &iindex, &index, 0.0f);
     }
 
-    cwsFillMesh(s->renderer->mesh, vertices, vindex, indices, iindex);
+    cwsFillMesh(s->mesh, vertices, vindex, indices, iindex);
 }
 
 /*
@@ -487,14 +529,17 @@ void update_surface_component_data(cwsGuiSurface *s)
             continue;
         }
         cwsGuiButton* btn = &cws_bucket_array_index(s->buttons, i);
-        text_center_and_clip(btn->text, (vec2){.x = btn->pos.x+s->transform->pos.x, 
-                                                         .y = btn->pos.y+s->transform->pos.y}, 
+        text_center_and_clip(btn->text, 
+                             (vec2){
+                             .x = btn->pos.x+s->pos.x, 
+                                                         .y = btn->pos.y+s->pos.y
+                             }, 
                                                          btn->size, button_skin.outline_size);
 
-        s->renderer->item_data.data[index++] = btn->pos.x;
-        s->renderer->item_data.data[index++] = btn->pos.y;
-        s->renderer->item_data.data[index++] = btn->size.x;
-        s->renderer->item_data.data[index++] = btn->size.y;
+        s->item_data.data[index++] = btn->pos.x;
+        s->item_data.data[index++] = btn->pos.y;
+        s->item_data.data[index++] = btn->size.x;
+        s->item_data.data[index++] = btn->size.y;
 
         /*
             Skin data
@@ -502,10 +547,10 @@ void update_surface_component_data(cwsGuiSurface *s)
             The second is the index of the fill color to use for the item part, a button uses 2 colors to 
             indicate the state (pressed or released)
         */
-        s->renderer->item_data.data[index++] = 0;
-        s->renderer->item_data.data[index++] = ((btn->event_flags&EVENT_CLICKED) || (btn->event_flags&EVENT_MOUSE_DOWN)) ? 1.0f : 0.0f;
-        s->renderer->item_data.data[index++] = 0.0f;
-        s->renderer->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 0;
+        s->item_data.data[index++] = ((btn->event_flags&EVENT_CLICKED) || (btn->event_flags&EVENT_MOUSE_DOWN)) ? 1.0f : 0.0f;
+        s->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 0.0f;
     }
 
     for(u32 i = 0; i < cws_bucket_array_item_count(s->sliders); ++i)
@@ -517,25 +562,28 @@ void update_surface_component_data(cwsGuiSurface *s)
         
         cwsGuiSlider *slider = &cws_bucket_array_index(s->sliders, i);
         text_center_and_clip(slider->text, 
-                            (vec2){.x = slider->pos.x+s->transform->pos.x,
-                            .y = slider->pos.y+s->transform->pos.y},
+                            (vec2){
+                             .x = slider->pos.x+s->pos.x,
+                            .y = slider->pos.y+s->pos.y},
                             slider->size, 
                             slider_skin.outline_size);
         //mark
-        s->renderer->item_data.data[index++] = slider->pos.x + ((f32)slider->size.x / (f32)(slider->max-slider->min)) * ((f32)slider->value - slider->min) - ((f32)slider->size.x * slider_skin.mark_scale.x * 0.5f);
-        s->renderer->item_data.data[index++] = slider->pos.y - slider->size.y / (slider->size.y * slider_skin.mark_scale.y);
-        s->renderer->item_data.data[index++] = (f32)slider->size.x * slider_skin.mark_scale.x;
-        s->renderer->item_data.data[index++] = (f32)slider->size.y * slider_skin.mark_scale.y;
+        s->item_data.data[index++] = 
+            slider->pos.x + ((f32)slider->size.x / (f32)(slider->max-slider->min)) * ((f32)slider->value - slider->min) - ((f32)slider->size.x * slider_skin.mark_scale.x * 0.5f);
+        s->item_data.data[index++] = 
+            slider->pos.y - slider->size.y / (slider->size.y * slider_skin.mark_scale.y);
+        s->item_data.data[index++] = (f32)slider->size.x * slider_skin.mark_scale.x;
+        s->item_data.data[index++] = (f32)slider->size.y * slider_skin.mark_scale.y;
 
-        s->renderer->item_data.data[index++] = 1;
-        s->renderer->item_data.data[index++] = 1.0f;
-        s->renderer->item_data.data[index++] = 0.0f;
-        s->renderer->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 1;
+        s->item_data.data[index++] = 1.0f;
+        s->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 0.0f;
         
-        s->renderer->item_data.data[index++] = slider->pos.x;
-        s->renderer->item_data.data[index++] = slider->pos.y;
-        s->renderer->item_data.data[index++] = slider->size.x;
-        s->renderer->item_data.data[index++] = slider->size.y;
+        s->item_data.data[index++] = slider->pos.x;
+        s->item_data.data[index++] = slider->pos.y;
+        s->item_data.data[index++] = slider->size.x;
+        s->item_data.data[index++] = slider->size.y;
 
         /*
             Skin data
@@ -543,10 +591,10 @@ void update_surface_component_data(cwsGuiSurface *s)
             The second is the index of the fill color to use for the item part, index 0 is used for the base
             and index 1 is used for the marker
         */
-        s->renderer->item_data.data[index++] = 1;
-        s->renderer->item_data.data[index++] = 0.0f;
-        s->renderer->item_data.data[index++] = 0.0f;
-        s->renderer->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 1;
+        s->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 0.0f;
 
     }
 
@@ -559,14 +607,15 @@ void update_surface_component_data(cwsGuiSurface *s)
         
         cwsGuiCheckbox *checkbox = &cws_bucket_array_index(s->checkboxes, i);
         text_center_and_clip(checkbox->text,
-                            (vec2){.x = checkbox->pos.x+s->transform->pos.x,
-                            .y = checkbox->pos.y+s->transform->pos.y}, 
+                            (vec2){
+                             .x = checkbox->pos.x+s->pos.x,
+                            .y = checkbox->pos.y+s->pos.y}, 
                             checkbox->size, checkbox_skin.outline_size);
 
-        s->renderer->item_data.data[index++] = checkbox->pos.x;
-        s->renderer->item_data.data[index++] = checkbox->pos.y;
-        s->renderer->item_data.data[index++] = checkbox->size.x;
-        s->renderer->item_data.data[index++] = checkbox->size.y;
+        s->item_data.data[index++] = checkbox->pos.x;
+        s->item_data.data[index++] = checkbox->pos.y;
+        s->item_data.data[index++] = checkbox->size.x;
+        s->item_data.data[index++] = checkbox->size.y;
 
         /*
             Skin data
@@ -574,21 +623,21 @@ void update_surface_component_data(cwsGuiSurface *s)
             The second is the index of the fill color to use for the item part, index 0 is used for the base
             and index 1 is used for the marker
         */
-        s->renderer->item_data.data[index++] = 2;
-        s->renderer->item_data.data[index++] = 0.0f;
-        s->renderer->item_data.data[index++] = 0.0f;
-        s->renderer->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 2;
+        s->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 0.0f;
 
         //mark
-        s->renderer->item_data.data[index++] = checkbox->pos.x + ((f32)checkbox->size.x*checkbox_skin.mark_offset.x);
-        s->renderer->item_data.data[index++] = checkbox->pos.y + ((f32)checkbox->size.y*checkbox_skin.mark_offset.y);
-        s->renderer->item_data.data[index++] = (f32)checkbox->size.y * checkbox_skin.mark_scale;
-        s->renderer->item_data.data[index++] = (f32)checkbox->size.y * checkbox_skin.mark_scale;
+        s->item_data.data[index++] = checkbox->pos.x + ((f32)checkbox->size.x*checkbox_skin.mark_offset.x);
+        s->item_data.data[index++] = checkbox->pos.y + ((f32)checkbox->size.y*checkbox_skin.mark_offset.y);
+        s->item_data.data[index++] = (f32)checkbox->size.y * checkbox_skin.mark_scale;
+        s->item_data.data[index++] = (f32)checkbox->size.y * checkbox_skin.mark_scale;
 
-        s->renderer->item_data.data[index++] = 2;
-        s->renderer->item_data.data[index++] = 1.0f + checkbox->checked;
-        s->renderer->item_data.data[index++] = 0.0f;
-        s->renderer->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 2;
+        s->item_data.data[index++] = 1.0f + checkbox->checked;
+        s->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 0.0f;
     }
 
     for(u32 i = 0; i < cws_bucket_array_item_count(s->toggle_buttons); ++i)
@@ -600,13 +649,14 @@ void update_surface_component_data(cwsGuiSurface *s)
         
         cwsGuiToggleButton *tbtn = &cws_bucket_array_index(s->toggle_buttons,i);
         text_center_and_clip(tbtn->text,
-                            (vec2){.x = tbtn->pos.x+s->transform->pos.x,
-                            .y = tbtn->pos.y+s->transform->pos.y}, tbtn->size, button_skin.outline_size);
+                            (vec2){
+                             .x = tbtn->pos.x+s->pos.x,
+                            .y = tbtn->pos.y+s->pos.y}, tbtn->size, button_skin.outline_size);
 
-        s->renderer->item_data.data[index++] = tbtn->pos.x;
-        s->renderer->item_data.data[index++] = tbtn->pos.y;
-        s->renderer->item_data.data[index++] = tbtn->size.x;
-        s->renderer->item_data.data[index++] = tbtn->size.y;
+        s->item_data.data[index++] = tbtn->pos.x;
+        s->item_data.data[index++] = tbtn->pos.y;
+        s->item_data.data[index++] = tbtn->size.x;
+        s->item_data.data[index++] = tbtn->size.y;
 
         /*
             Skin data
@@ -614,27 +664,53 @@ void update_surface_component_data(cwsGuiSurface *s)
             The second is the index of the fill color to use for the item part, a button uses 2 colors to 
             indicate the state (pressed or released)
         */
-        s->renderer->item_data.data[index++] = 0;
-        s->renderer->item_data.data[index++] = tbtn->toggled;
-        s->renderer->item_data.data[index++] = 0.0f;
-        s->renderer->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 0;
+        s->item_data.data[index++] = tbtn->toggled;
+        s->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 0.0f;
     }
     
-    if(s->renderer->fill)
+    for(u32 i = 0; i < cws_bucket_array_item_count(s->view_panels); ++i)
     {
-        s->renderer->item_data.data[index++] = 0.0f;
-        s->renderer->item_data.data[index++] = 0.0f;
-        s->renderer->item_data.data[index++] = s->transform->size.x;
-        s->renderer->item_data.data[index++] = s->transform->size.y;                
+        if(!cws_bucket_array_occupied(s->view_panels, i))
+        {
+            continue;
+        }
         
-        s->renderer->item_data.data[index++] = 3;
-        s->renderer->item_data.data[index++] = 0.0f;
-        s->renderer->item_data.data[index++] = 0.0f;
-        s->renderer->item_data.data[index++] = 0.0f;
+        cwsGuiViewPanel *viewp = &cws_bucket_array_index(s->view_panels,i);
+        
+        s->item_data.data[index++] = viewp->pos.x;
+        s->item_data.data[index++] = viewp->pos.y;
+        s->item_data.data[index++] = viewp->size.x;
+        s->item_data.data[index++] = viewp->size.y;
+        
+        /*
+            Skin data
+            The first index decides which skin to use in the shader (0 for button skin)
+            The second is the index of the fill color to use for the item part, a button uses 2 colors to 
+            indicate the state (pressed or released)
+        */
+        s->item_data.data[index++] = 4;
+        s->item_data.data[index++] = 0;
+        s->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 0.0f;
+    }
+    
+    if(s->fill)
+    {
+        s->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = s->size.x;
+        s->item_data.data[index++] = s->size.y;                
+        
+        s->item_data.data[index++] = 3;
+        s->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 0.0f;
+        s->item_data.data[index++] = 0.0f;
     }
 
-    glBindBuffer(GL_TEXTURE_BUFFER, s->renderer->tex_buffer);
-    glBufferData(GL_TEXTURE_BUFFER, sizeof(f32)*s->renderer->item_data.length, s->renderer->item_data.data, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_TEXTURE_BUFFER, s->tex_buffer);
+    glBufferData(GL_TEXTURE_BUFFER, sizeof(f32)*s->item_data.length, s->item_data.data, GL_DYNAMIC_DRAW);
     glBindBuffer(GL_TEXTURE_BUFFER, 0);
 
     for(u32 i = 0; i < s->children.length; ++i)
@@ -646,8 +722,8 @@ void update_surface_component_data(cwsGuiSurface *s)
 //Called when the left mouse button was just clicked!
 void surface_events_clicked(cwsGuiSurface *s, vec2 mouse)
 {
-    mouse.x -= s->transform->pos.x;
-    mouse.y -= s->transform->pos.y;
+    mouse.x -= s->pos.x;
+    mouse.y -= s->pos.y;
 
     for(u32 i = 0; i < cws_bucket_array_item_count(s->buttons); ++i)
     {
@@ -688,7 +764,7 @@ void surface_events_clicked(cwsGuiSurface *s, vec2 mouse)
 
         char buf[8];
         sprintf(buf, "%d", slider->value);
-        cwsRebuildText(s->renderer->text_context, slider->text, buf);
+        cwsRebuildText(s->text_context, slider->text, buf);
     }
 
     for(u32 i = 0; i < cws_bucket_array_item_count(s->checkboxes); ++i)
@@ -735,8 +811,8 @@ void surface_events_clicked(cwsGuiSurface *s, vec2 mouse)
 //Called when the left mouse is held down
 void surface_events_down(cwsGuiSurface *s, vec2 mouse)
 {
-    mouse.x -= s->transform->pos.x;
-    mouse.y -= s->transform->pos.y;
+    mouse.x -= s->pos.x;
+    mouse.y -= s->pos.y;
 
     for(size_t i = 0; i < cws_bucket_array_item_count(s->buttons); ++i)
     {
@@ -781,7 +857,7 @@ void surface_events_down(cwsGuiSurface *s, vec2 mouse)
         
         char buf[8];
         sprintf(buf, "%d", slider->value);
-        cwsRebuildText(s->renderer->text_context, slider->text, buf);
+        cwsRebuildText(s->text_context, slider->text, buf);
     }
 
     for(u32 i = 0; i < cws_bucket_array_item_count(s->checkboxes); ++i)
@@ -906,10 +982,10 @@ void cwsGuiUpdate()
             surface_events_released(visible_surfaces.data[i], get_mouse_position());
         }
         
-        if(!(mp.x < visible_surfaces.data[i]->transform->pos.x ||
-             mp.x > visible_surfaces.data[i]->transform->pos.x + visible_surfaces.data[i]->transform->size.x ||
-             mp.y < visible_surfaces.data[i]->transform->pos.y ||
-             mp.y > visible_surfaces.data[i]->transform->pos.y + visible_surfaces.data[i]->transform->size.y))
+        if(!(mp.x < visible_surfaces.data[i]->pos.x ||
+             mp.x > visible_surfaces.data[i]->pos.x + visible_surfaces.data[i]->size.x ||
+             mp.y < visible_surfaces.data[i]->pos.y ||
+             mp.y > visible_surfaces.data[i]->pos.y + visible_surfaces.data[i]->size.y))
         {
             reset = true;
         }
@@ -921,7 +997,7 @@ void cwsGuiUpdate()
     }
 }
 
-void draw_surface(cwsSurfaceRenderer *s, vec3 parent_pos, vec2 parent_size)
+void draw_surface(cwsGuiSurface *s, vec3 parent_pos, vec2 parent_size)
 {
     cwsBindMaterial(&material);
 
@@ -964,16 +1040,20 @@ void draw_surface(cwsSurfaceRenderer *s, vec3 parent_pos, vec2 parent_size)
     glUniform3f(glGetUniformLocation(material.shader.id, "SkinData[3].outline_color"),  outline0.x, outline0.y, outline0.z);
     glUniform1f(glGetUniformLocation(material.shader.id, "SkinData[3].outline_size"),   surface_skin.outline_size);
 
+    outline0 = cwsUnpackRgb(viewpanel_skin.outline_color);
+    glUniform3f(glGetUniformLocation(material.shader.id, "SkinData[4].outline_color"),  outline0.x, outline0.y, outline0.z);
+    glUniform1f(glGetUniformLocation(material.shader.id, "SkinData[4].outline_size"),   surface_skin.outline_size);
+    
     //Combined position of this surface & top visible_surfaces
     vec3 pp = (vec3){.x = (f32)parent_pos.x, .y = (f32)parent_pos.y, .z = (f32)parent_pos.z};
-    vec3 sp = (vec3){.x = (f32)s->transform->pos.x, .y = (f32)s->transform->pos.y, .z = (f32)s->transform->pos.z};
+    vec3 sp = (vec3){.x = (f32)s->pos.x, .y = (f32)s->pos.y, .z = (f32)s->pos.z};
     vec3 comb = vec3_add(sp, pp);
 
     //Calculates the maximum size the surface can be when contained within other surface(s)
-    f32 width = (comb.x+s->transform->size.x) > parent_size.x ? parent_size.x - comb.x : s->transform->size.x;
-    f32 height = (comb.y+s->transform->size.y) > parent_size.y ? parent_size.y - comb.y : s->transform->size.y;
+    f32 width = (comb.x+s->size.x) > parent_size.x ? parent_size.x - comb.x : s->size.x;
+    f32 height = (comb.y+s->size.y) > parent_size.y ? parent_size.y - comb.y : s->size.y;
 
-    glScissor(comb.x,cwsScreenSize().y-(comb.y+s->transform->size.y), width, height);
+    glScissor(comb.x,cwsScreenSize().y-(comb.y+s->size.y), width, height);
     mat4 t = mat4_translate(mat4_default, comb);
 
     //The first texture unit will have the detail texture bound to it!
@@ -990,7 +1070,7 @@ void draw_surface(cwsSurfaceRenderer *s, vec3 parent_pos, vec2 parent_size)
 
     for(u32 i = 0; i < s->children.length; ++i)
     {
-        draw_surface(s->children.data[i], comb, s->transform->size);
+        draw_surface(s->children.data[i], comb, s->size);
     }
 }
 
@@ -1002,15 +1082,40 @@ void cwsGuiDraw()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    mat4 id = mat4_default;
-    cwsSetPVMatrices(ortho, id);
-
     for(u32 i = 0; i < visible_surfaces.length; ++i)
     {
-        draw_surface(visible_surfaces.data[i]->renderer, (vec3){.x = 0, .y = 0, .z = 0}, cwsScreenSize());
+        cwsGuiSurface *s = visible_surfaces.data[i];
+        
+        //Render the entities of the view panels
+        for(u32 i = 0; i < cws_bucket_array_item_count(s->view_panels); ++i)
+        {
+            if(!cws_bucket_array_occupied(s->view_panels, i))
+            {
+                continue;
+            }
+            
+            cwsGuiViewPanel *viewp = &cws_bucket_array_index(s->view_panels, i);
+            glBindFramebuffer(GL_FRAMEBUFFER, viewp->fbo_id);
+            glViewport(0, 0, viewp->size.x, viewp->size.y);
+            vec3 bgc = cwsUnpackRgb(viewp->bg_color);
+            glClearColor(bgc.x, bgc.y, bgc.z, 1);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            
+            if(viewp->mesh != NULL && viewp->material != NULL)
+            {
+                cwsSetPVMatrices(viewp->projection_matrix, viewp->view_matrix);
+                cwsBindMaterial(viewp->material);
+                cwsDrawMesh(mat4_default, viewp->mesh, GL_TRIANGLES);
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        }
+        
+        glViewport(0,0,cwsScreenSize().x, cwsScreenSize().y);
+        cwsSetPVMatrices(ortho, mat4_default);
+        draw_surface(s, (vec3){.x = 0, .y = 0, .z = 0}, cwsScreenSize());
 
         glDisable(GL_DEPTH_TEST);
-        cwsDrawTextContext(visible_surfaces.data[i]->renderer->text_context);
+        cwsDrawTextContext(s->text_context);
         glEnable(GL_DEPTH_TEST);
     }
 

@@ -13,7 +13,6 @@
 #include "../util/cws_string.h"
 #include "../io/file.h"
 #include "../math/matrix.h"
-#include "../util/cws_nodetree.h"
 #include "../io/filesystem.h"
 #define FONT_ASCII_CHAR_COUNT 256
 typedef struct aiScene aiScene;
@@ -50,7 +49,7 @@ typedef struct
 	u32 id;
     u32 mvp_id, view_id, model_id, projection_id;
     cws_array(u32) uniforms;
-    cws_array(cws_string) unames;
+    cws_array(cws_str) unames;
 } cwsShader;
 
 typedef struct
@@ -191,7 +190,7 @@ typedef struct
 	vec2 __size;
 	vec4 bounds;
 
-	cws_string str;
+	cws_str str;
 	cwsTextContext *context;
 } cwsText;
 

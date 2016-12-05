@@ -1,6 +1,25 @@
 #include "cws_string.h"
 
-void cws_string_build(cws_string *s, const char *s2)
+//Allocates a new string and copies the data from src into the new returned buffer
+//This returned buffer must be deleted!
+char* copy_conststr(const char *src, i32 src_length)
+{
+    char *copy = (char*)malloc(sizeof(char) * src_length+1);
+    for(i32 i = 0; i < src_length; ++i)
+    {
+        copy[i] = src[i];
+    }
+    
+    copy[src_length] = '\0';
+    return copy;
+}
+
+void cws_str_init(cws_str *s)
+{
+    *s = (cws_str){.length = 0,.data = NULL};
+}
+
+void cws_str_build(cws_str *s, const char *s2)
 {
 	if(s->data != NULL)
 	{
@@ -29,7 +48,34 @@ void cws_string_build(cws_string *s, const char *s2)
 	s->data[lng] = '\0';
 }
 
-void cws_string_copy(cws_string *dest, cws_string *src)
+void cws_str_append(cws_str *dest, const char *s2)
+{
+    if(s2 == NULL || dest == NULL)
+    {
+        return; 
+    }
+    
+    if(dest->data == NULL)
+    {
+        cws_str_build(dest, s2);
+    }
+    else
+    {
+        char *nw = realloc(dest->data, dest->length + strlen(s2));
+        if(nw)
+        {
+            dest->data = nw;
+            strcpy(dest->data + dest->length, s2);
+            dest->length += strlen(s2);
+        }
+        else
+        {
+            cws_log("Error reallocating memory for cws_str!");
+        }
+    }
+}
+
+void cws_str_copy(cws_str *dest, cws_str *src)
 {
 	if(dest->length == src->length)
 	{
@@ -60,7 +106,7 @@ void cws_string_copy(cws_string *dest, cws_string *src)
 	}
 }
 
-bool cws_string_cmp(cws_string *s1, cws_string *s2)
+bool cws_str_cmp(cws_str *s1, cws_str *s2)
 {
     if(s1->length != s2->length)
     {
@@ -78,7 +124,7 @@ bool cws_string_cmp(cws_string *s1, cws_string *s2)
     return true;
 }
 
-void cws_string_free(cws_string* s)
+void cws_str_free(cws_str* s)
 {
 	s->length = 0;
 

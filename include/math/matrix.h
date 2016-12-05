@@ -84,7 +84,7 @@ f32     vec3_dot(vec3 v1, vec3 v2);
 
 mat4    mat4_mul(mat4 m2, mat4 m1);
 mat4    mat4_ortho(f32 left, f32 right, f32 bot, f32 top, f32 near, f32 far);
-mat4    mat4_perspective(i32 scrcwsn_w, i32 scrcwsn_h, f32 fov, f32 near, f32 far);
+mat4    mat4_perspective(i32 screen_w, i32 screen_h, f32 fov, f32 near, f32 far);
 mat4    mat4_lookat(vec3 pos, vec3 target, vec3 up);
 mat4    mat4_inverse(mat4 m);
 mat4    mat4_transpose(mat4 m);

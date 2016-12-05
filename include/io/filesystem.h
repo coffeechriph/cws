@@ -17,7 +17,7 @@ typedef enum
 
 typedef struct
 {
-    cws_string name;
+    cws_str name;
     i32 file_type;
 } cwsDir;
 
